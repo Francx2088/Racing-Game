@@ -190,8 +190,8 @@ THEMES.arctic = {
 // ============ 6. EMBER ============
 THEMES.ember = {
   accent: 0xff5a1f, bgm: { root: 123.5, scale: 'phrygian', bpm: 138 }, card: [0x2a0808, 0xa0301a, 0xff8a2a],
-  sky: { turb: 30, ray: 0.9, mie: 0.03, mieG: 0.9, elev: 3, azim: 160 },
-  fog: [0x6a2a1c, 70, 980], sun: { color: 0xff8a50, int: 2.4 }, hemi: [0xff8a5a, 0x2a0a08, 0.5], exposure: 0.6, envInt: 0.9, glare: 0.7,
+  sky: { turb: 12, ray: 1.1, mie: 0.012, mieG: 0.78, elev: 3, azim: 160 },
+  fog: [0x6a2a1c, 70, 980], sun: { color: 0xff8a50, int: 2.2 }, hemi: [0xff8a5a, 0x2a0a08, 0.5], exposure: 0.45, envInt: 0.9, glare: 0.7,
   clouds: [{ y: -60, color: 0xb86a4a, shade: 0x2a1410, density: 0.46, alpha: 0.97, scale: 0.0015, glow: 0xff5a10, glowAmt: 0.25 }, { y: -170, color: 0xff7a2a, shade: 0x7a1e08, density: 0.38, alpha: 1, scale: 0.0011, glow: 0xff6a10, glowAmt: 0.7, speed: 1.4 }],
   road: { base: 0x2f2d30, line: 0xffd9a0, kerbA: 0xff5a1f, kerbB: 0x2a2024, shoulder: 0x3a3436, wallA: 0x4a4044, wallB: 0x6a3a2a, barrier: 'jersey', deck: 0x5a4a46, env: 0.8, wallGlow: 0xff6a1a, underglow: 0xff5a1f },
   weather: ['embers', 'wisps'],
@@ -215,7 +215,7 @@ THEMES.ember = {
 THEMES.isles = {
   accent: 0x2ee6a6, bgm: { root: 261.6, scale: 'major', bpm: 126 }, card: [0x1e90ff, 0x8fe0ff, 0xfff6c0],
   sky: { turb: 3, ray: 2.4, mie: 0.004, mieG: 0.8, elev: 38, azim: 170 },
-  fog: [0xa8dcf5, 200, 1700], sun: { color: 0xfff6e0, int: 3.0 }, hemi: [0xb8e4ff, 0x9ad0a0, 0.75], exposure: 0.5, envInt: 1.0, glare: 0.55,
+  fog: [0xa8dcf5, 200, 1700], sun: { color: 0xfff6e0, int: 3.0 }, hemi: [0xb8e4ff, 0x9ad0a0, 0.6], exposure: 0.4, envInt: 1.0, glare: 0.55,
   clouds: [{ y: -130, color: 0xffffff, shade: 0x9cc4e4, density: 0.55, alpha: 0.97, scale: 0.0015 }, { y: -260, color: 0xe6f4ff, shade: 0x7aa8d0, density: 0.5, alpha: 0.95, scale: 0.001, speed: 0.6 }],
   road: { base: 0x404247, line: 0xffffff, kerbA: 0x00897b, kerbB: 0xffffff, shoulder: 0x62666b, wallA: 0xf4f0e8, wallB: 0x26a69a, barrier: 'rail', deck: 0xc4c2b8, env: 0.8 },
   weather: ['wisps'],
@@ -253,13 +253,15 @@ THEMES.stratos = {
           vec3 ocean = vec3(0.03,0.12,0.38), ground = vec3(0.16,0.3,0.14); vec3 base = mix(ocean, ground, land);
           float cl = smoothstep(0.52,0.78,c); base = mix(base, vec3(0.95), cl*0.85);
           float lit = clamp(dot(vN, uSun)*0.9+0.25, 0.05, 1.0); vec3 col = base*lit + vec3(0.25,0.5,1.0)*fres*1.2;
-          gl_FragColor = vec4(col,1.0); #include <tonemapping_fragment>
-          #include <colorspace_fragment> }`,
+          gl_FragColor = vec4(col,1.0);
+          #include <tonemapping_fragment>
+          #include <colorspace_fragment>
+        }`,
     });
     const earth = new THREE.Mesh(new THREE.SphereGeometry(9000, 96, 64), earthMat); earth.position.set(ctx.cx, -9400, ctx.cz); earth.renderOrder = -7; ctx.scene.add(earth);
     const atm = new THREE.Mesh(new THREE.SphereGeometry(9250, 64, 48), new THREE.ShaderMaterial({ transparent: true, depthWrite: false, side: THREE.BackSide, blending: THREE.AdditiveBlending,
       vertexShader: 'varying vec3 vN; varying vec3 vP; void main(){ vN=normalize(mat3(modelMatrix)*normal); vP=(modelMatrix*vec4(position,1.)).xyz; gl_Position=projectionMatrix*viewMatrix*modelMatrix*vec4(position,1.); }',
-      fragmentShader: 'varying vec3 vN; varying vec3 vP; void main(){ vec3 V=normalize(cameraPosition-vP); float f=pow(1.0-abs(dot(V,vN)),4.0); gl_FragColor=vec4(vec3(0.3,0.55,1.0)*f*1.4, f); #include <tonemapping_fragment>\n #include <colorspace_fragment> }' }));
+      fragmentShader: 'varying vec3 vN; varying vec3 vP; void main(){ vec3 V=normalize(cameraPosition-vP); float f=pow(1.0-abs(dot(V,vN)),4.0); gl_FragColor=vec4(vec3(0.3,0.55,1.0)*f*1.4, f);\n #include <tonemapping_fragment>\n #include <colorspace_fragment>\n }' }));
     atm.position.copy(earth.position); atm.renderOrder = -6; ctx.scene.add(atm);
     // satellites & debris
     const sat = merge([part(box(3, 2, 3), 0xd0a040, { p: [0, 0, 0] }), part(box(12, 0.15, 3.2), 0x1a3a9a, { p: [-8, 0, 0] }), part(box(12, 0.15, 3.2), 0x1a3a9a, { p: [8, 0, 0] }), part(cyl(0.15, 0.15, 5, 6), 0xcccccc, { p: [0, 3.5, 0] }), part(sph(1.2, 10, 6), 0xdddddd, { p: [0, 6.2, 0] })]);
@@ -302,7 +304,7 @@ THEMES.mesa = {
 THEMES.heaven = {
   accent: 0xffe08a, bgm: { root: 233, scale: 'major', bpm: 140 }, card: [0x6aa8ff, 0xfff0c8, 0xffd27a],
   sky: { turb: 4, ray: 1.8, mie: 0.005, mieG: 0.86, elev: 22, azim: 200 },
-  fog: [0xcfe4fa, 220, 1800], sun: { color: 0xfff0d0, int: 3.4 }, hemi: [0xdfeeff, 0xf0e0b8, 0.8], exposure: 0.5, envInt: 1.0, glare: 1.0,
+  fog: [0xcfe4fa, 220, 1800], sun: { color: 0xfff0d0, int: 3.4 }, hemi: [0xdfeeff, 0xf0e0b8, 0.6], exposure: 0.4, envInt: 1.0, glare: 1.0,
   clouds: [{ y: -90, color: 0xffffff, shade: 0xb0c4e4, density: 0.5, alpha: 0.98, scale: 0.0014 }, { y: -200, color: 0xfff1d4, shade: 0xb2a2c2, density: 0.46, alpha: 0.96, scale: 0.001, speed: 0.6 }],
   road: { base: 0x46484e, line: 0xffffff, kerbA: 0xd4a017, kerbB: 0xffffff, shoulder: 0x70747a, wallA: 0xfaf6ea, wallB: 0xd4a017, barrier: 'glass', deck: 0xe6e0d0, env: 1.0, wallGlow: 0xffd45a },
   weather: ['wisps', 'sparkle'],
