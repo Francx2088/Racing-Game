@@ -267,6 +267,8 @@ function obstacleGeo(kind, th) {
     gumdrop: () => ({ g: merge([part(sph(1.1, 10, 7), 0xff4fa3, { p: [0, 0.6, 0], s: [1, 0.85, 1] }), part(cyl(1.15, 1.15, 0.3, 10), 0xffffff, { p: [0, 0.15, 0] })]), r: 1.15 }),
     moonrock: () => ({ g: merge([part(ico(1.2, 0), 0x8d8d99, { p: [0, 0.7, 0], s: [1.2, 0.8, 1] }), part(ico(0.6, 0), 0xb4b4c0, { p: [0.8, 0.35, 0.5] })]), r: 1.3 }),
     haybale: () => ({ g: merge([part(cyl(0.9, 0.9, 1.5, 12), 0xe0b43c, { p: [0, 0.9, 0], r: [0, 0, Math.PI / 2] }), part(cyl(0.93, 0.93, 0.12, 12), 0xb88a22, { p: [0, 0.9, 0], r: [0, 0, Math.PI / 2] })]), r: 1.2 }),
+    crate: () => ({ g: merge([part(box(1.6, 1.6, 1.6), 0x9a6a3a, { p: [0, 0.8, 0], r: [0, 0.4, 0] }), part(box(1.7, 0.18, 1.7), 0x6e4a26, { p: [0, 0.2, 0], r: [0, 0.4, 0] }), part(box(1.7, 0.18, 1.7), 0x6e4a26, { p: [0, 1.4, 0], r: [0, 0.4, 0] })]), r: 1.3 }),
+    debris: () => ({ g: merge([part(box(1.8, 0.5, 1.2), 0xb8bcc8, { p: [0, 0.6, 0], r: [0.3, 0.5, 0.2] }), part(ico(0.8, 0), 0x7a7a86, { p: [0.6, 0.5, 0.4] })]), r: 1.3 }),
     star: () => ({ g: merge([part(oct(1.3), 0xffe94d, { p: [0, 1.4, 0], s: [1, 1.2, 1] }), part(oct(0.8), 0xff8a1f, { p: [0, 1.4, 0], r: [0.6, 0.6, 0], s: 1 })]), r: 1.2, basic: true }),
   };
   const o = K[kind]();

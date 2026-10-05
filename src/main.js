@@ -176,7 +176,7 @@ async function startRace(levelIndex) {
   const L = { ...LEVELS[levelIndex] }; if (DEBUG.laps) L.laps = +DEBUG.laps;
   const world = buildWorld(L, renderer);
   const th = world.th;
-  renderer.toneMappingExposure = th.exposure ?? 0.6; initComposer(); if (bloom) bloom.strength = th.night ? 0.55 : 0.3;
+  renderer.toneMappingExposure = th.exposure ?? 0.6; initComposer(); if (bloom) { bloom.strength = th.night ? 0.55 : 0.28; bloom.threshold = th.night ? 0.9 : 3.2; }
   // particles
   sparks = new Particles(world.scene, 700, true); smoke = new Particles(world.scene, 600, false); flames = new Particles(world.scene, 700, true); dust = new Particles(world.scene, 500, false);
   save.runs++;
