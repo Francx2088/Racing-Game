@@ -1,0 +1,23 @@
+<!doctype html><html><body><pre id=o></pre>
+<script type=module>
+import { LEVELS } from '/src/levels.js'; import { buildWorld } from '/src/world.js'; import { Race } from '/src/race.js'; import { CARS, makeLivery } from '/src/cars.js'; import { rng } from '/src/util.js';
+const out = [];
+const only = new URLSearchParams(location.search).get('l');
+for (let li = 0; li < LEVELS.length; li++) {
+  if (only != null && +only !== li) continue;
+  const L = LEVELS[li]; const world = buildWorld(L); const R = rng(5);
+  const setups = []; for (let i = 0; i < 6; i++) setups.push({ id: i === 5 ? 'me' : 'ai' + i, name: 'c' + i, def: CARS[i % 4], isPlayer: i === 5, skill: i === 5 ? 1 : (65 * L.ai * (0.95 + R() * 0.08)) / CARS[i % 4].phys.vmax, lane: R.range(-0.8, 0.8), livery: null });
+  const ev = { wall: 0, bump: 0, obst: 0, rec: 0, pad: 0, land: 0, launch: 0 };
+  const race = new Race(world, setups, { onWall: () => ev.wall++, onBump: () => ev.bump++, onObstacle: () => ev.obst++, onRecover: () => ev.rec++, onPad: () => ev.pad++, onLand: () => ev.land++, onLaunch: () => ev.launch++ });
+  const p = race.player; let t = 0, maxSp = 0, offroad = 0;
+  while (t < 400 && race.state !== 'done') {
+    const inp = race._ai(p, 1 / 60);
+    // player uses nitro sometimes
+    race.update(1 / 60, inp); t += 1 / 60; maxSp = Math.max(maxSp, p.speed); if (!p.onRoad) offroad += 1 / 60;
+    if (race.state === 'racing' && p.finished && race.cars.every(c => c.finished)) break;
+  }
+  out.push(`${L.name.padEnd(16)} len ${world.track.length.toFixed(0)} lap~${(race.cars[0].finishTime / L.laps).toFixed(1)}s  order: ${race.order.map(c => c.name + (c.finished ? '@' + c.finishTime.toFixed(0) : '?')).join(' ')}  | maxSp ${(maxSp*3.6).toFixed(0)}kmh offroad ${offroad.toFixed(1)}s ev ${JSON.stringify(ev)}`);
+  world.dispose();
+}
+document.getElementById('o').textContent = out.join('\n'); window.DONE = true; window.OUT = out.join('\n');
+</script></body></html>
