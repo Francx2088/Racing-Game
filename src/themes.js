@@ -248,11 +248,11 @@ THEMES.volcano = {
 // ============ 7. CANDY ============
 THEMES.candy = {
   accent: 0xff4fa3, bgm: { root: 261.6, scale: 'major', bpm: 128 },
-  sky: [0xff8fd0, 0xffcfeb, 0xfff6d0], fog: [0xffc4e6, 160, 900], sun: { color: 0xfff0e0, int: 1.4, pos: [200, 340, 120] }, hemi: [0xffe6f6, 0xffa8d8, 0.85], exposure: 1.08,
+  sky: [0xff6cc4, 0xffb2de, 0xfff0c8], fog: [0xffbfe2, 220, 1200], sun: { color: 0xfff0e0, int: 1.4, pos: [200, 340, 120] }, hemi: [0xffe6f6, 0xffa8d8, 0.7], exposure: 0.95,
   road: { base: 0x6b3b3a, speck: '255,220,230', line: 0xffffff, centerColor: 0xff7ab8, kerbA: 0xff4fa3, kerbB: 0xffffff, shoulder: 0xfff0f8, wallA: 0xff4fa3, wallB: 0xffffff, rough: 0.6 },
   terrain: {
     height: (x, z, n) => 2 + 14 * n.fbm(x * 0.006, z * 0.006, 3) + 3 * n.fbm(x * 0.04, z * 0.04, 2),
-    color: (h, ns, x, z, v) => { const band = Math.sin(x * 0.03 + z * 0.021 + ns * 6) > 0.2; return band ? mixHex(0xa8f5d8, 0x8ee8c8, ns) : mixHex(0xffc8e6, 0xffb0d8, ns); },
+    color: (h, ns, x, z, v) => { const band = Math.sin(x * 0.03 + z * 0.021 + ns * 6) > 0.2; return band ? mixHex(0x6fe8c0, 0x55d8b0, ns) : mixHex(0xff8cc8, 0xff6fb8, ns); },
   },
   build(ctx) {
     const { r } = ctx;

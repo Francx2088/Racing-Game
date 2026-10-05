@@ -172,7 +172,7 @@ export class Race {
       if (vn > 0) {
         c.vx -= sg * rrx * vn * 1.3; c.vz -= sg * rrz * vn * 1.3;
         const hit = vn / (Math.abs(vF) + 4);
-        const scale = 1 - Math.min(0.5, hit * 0.9);
+        const scale = 1 - Math.min(0.4, hit * 0.6);
         c.vx *= scale; c.vz *= scale;
         // steer back along the wall
         const th = q.head; c.h += wrapAngle(th - c.h) * 0.22;

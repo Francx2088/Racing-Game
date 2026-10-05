@@ -12,7 +12,7 @@ export class UI {
   constructor(root, h) {
     this.root = root; this.h = h; this.touch = { left: false, right: false, nitro: false, drift: false, brake: false };
     this.isTouch = matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window;
-    if (this.isTouch) document.body.classList.add('touch');
+    if (this.isTouch) document.body.classList.add('is-touch');
     root.innerHTML = `
       <div id="loading"><div class="logo"><span class="t1">TURBO</span><span class="t2">RAC<b>I</b>NG</span></div><div class="loadbar"><i></i></div><div class="tagline" id="loadtxt">Warming up engines…</div></div>
       <section class="screen hidden" id="screen-title"></section>
@@ -112,28 +112,35 @@ export class UI {
     this.hud.innerHTML = `
       <div class="hud-pos"><div class="p"><span id="h-pos">6</span><small>/6</small></div><div class="l">LAP <b id="h-lap">1/3</b></div></div>
       <div class="hud-board" id="h-board"></div>
-      <div class="hud-time"><div class="big" id="h-time">0:00.00</div><div class="sm" id="h-best">BEST --:--.--</div></div>
+      <div class="hud-time"><div class="big" id="h-time">0:00.00</div><div class="sm"><span id="h-best">BEST --:--.--</span> &nbsp;·&nbsp; <i class="coin"></i> <b id="h-coins">0</b></div></div>
       <div class="hud-right"><canvas id="h-map" width="170" height="170"></canvas><button class="iconbtn" id="h-pause">❚❚</button></div>
       <div class="hud-msg" id="h-msg"></div>
       <div class="hud-toasts" id="h-toasts"></div>
       <div class="hud-wrong hidden" id="h-wrong">⟲ WRONG WAY</div>
       <div class="hint hidden" id="h-hint"></div>
       <div class="hud-speed"><div class="drift-meter" id="h-drift"><i></i><i></i><i></i></div><div class="v"><span id="h-speed">0</span></div><div class="u">KM/H</div><div class="meter" id="h-nitro"><i></i></div></div>
-      <div class="touch" id="touch">
-        <div class="zone l" data-k="left"><div class="ar">◀</div></div><div class="zone r" data-k="right"><div class="ar">▶</div></div>
+      <div class="touchui" id="touch">
+        <div class="steer" id="steer"><div class="zone l">◀</div><div class="zone r">▶</div></div>
         <div class="tbtn nitro" data-k="nitro"><span>NITRO</span></div><div class="tbtn drift" data-k="drift"><span>DRIFT</span></div><div class="tbtn brake" data-k="brake"><span>BRAKE</span></div>
       </div>`;
-    this.el = { pos: $('#h-pos'), total: $('.hud-pos small'), lap: $('#h-lap'), time: $('#h-time'), best: $('#h-best'), speed: $('#h-speed'), nitro: $('#h-nitro'), drift: $('#h-drift'), board: $('#h-board'), msg: $('#h-msg'), toasts: $('#h-toasts'), wrong: $('#h-wrong'), hint: $('#h-hint'), map: $('#h-map') };
+    this.el = { pos: $('#h-pos'), total: $('.hud-pos small'), lap: $('#h-lap'), time: $('#h-time'), best: $('#h-best'), coins: $('#h-coins'), speed: $('#h-speed'), nitro: $('#h-nitro'), drift: $('#h-drift'), board: $('#h-board'), msg: $('#h-msg'), toasts: $('#h-toasts'), wrong: $('#h-wrong'), hint: $('#h-hint'), map: $('#h-map') };
     this.mapCtx = this.el.map.getContext('2d');
     $('#h-pause').onclick = () => this.h.pause();
     // touch handling
     const press = (k, v) => { this.touch[k] = v; };
     this.hud.querySelectorAll('#touch [data-k]').forEach((n) => {
       const k = n.dataset.k;
-      const on = (e) => { e.preventDefault(); n.setPointerCapture && n.setPointerCapture(e.pointerId); press(k, true); n.classList.add('active', 'on'); };
-      const off = (e) => { press(k, false); n.classList.remove('active', 'on'); };
+      const on = (e) => { e.preventDefault(); n.setPointerCapture && n.setPointerCapture(e.pointerId); press(k, true); n.classList.add('on'); };
+      const off = () => { press(k, false); n.classList.remove('on'); };
       n.addEventListener('pointerdown', on); n.addEventListener('pointerup', off); n.addEventListener('pointercancel', off); n.addEventListener('lostpointercapture', off);
     });
+    // steering pad: slide between left/right without lifting the thumb
+    const steer = $('#steer'), zl = steer.children[0], zr = steer.children[1];
+    const setSteer = (e) => { const r = steer.getBoundingClientRect(), left = e.clientX < r.left + r.width / 2; this.touch.left = left; this.touch.right = !left; zl.classList.toggle('active', left); zr.classList.toggle('active', !left); };
+    const clear = () => { this.touch.left = this.touch.right = false; zl.classList.remove('active'); zr.classList.remove('active'); };
+    steer.addEventListener('pointerdown', (e) => { e.preventDefault(); steer.setPointerCapture(e.pointerId); setSteer(e); });
+    steer.addEventListener('pointermove', (e) => { if (steer.hasPointerCapture(e.pointerId)) setSteer(e); });
+    steer.addEventListener('pointerup', clear); steer.addEventListener('pointercancel', clear); steer.addEventListener('lostpointercapture', clear);
   }
   initHud(track, total, lapsTotal, cars) {
     this.el.total.textContent = '/' + total; this.lapsTotal = lapsTotal; this._hudLast = {}; this.el.toasts.innerHTML = ''; this.el.msg.innerHTML = '';
@@ -155,6 +162,7 @@ export class UI {
     const lapTxt = Math.min(s.lap, s.laps) + '/' + s.laps; if (L.lap !== lapTxt) { e.lap.textContent = lapTxt; L.lap = lapTxt; }
     e.time.textContent = fmtTime(s.time);
     const bt = 'BEST ' + fmtTime(s.best); if (L.best !== bt) { e.best.textContent = bt; L.best = bt; }
+    if (L.coins !== s.coins) { e.coins.textContent = s.coins; L.coins = s.coins; }
     const sp = Math.round(s.speed); if (L.speed !== sp) { e.speed.textContent = sp; L.speed = sp; }
     e.nitro.firstElementChild.style.width = s.nitro + '%'; e.nitro.classList.toggle('ready', s.nitro > 99);
     e.drift.classList.toggle('on', s.drifting);

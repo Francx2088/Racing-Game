@@ -95,7 +95,8 @@ const cache = new Map();
 export function loadCar(def) {
   if (cache.has(def.id)) return cache.get(def.id);
   if (!loader) {
-    const draco = new DRACOLoader().setDecoderPath(BASE + 'draco/');
+    // Decoder files are bundled by Vite (three's DRACOLoader resolves them relative to itself) - no CDN needed.
+    const draco = new DRACOLoader();
     loader = new GLTFLoader().setDRACOLoader(draco);
   }
   const p = new Promise((resolve, reject) => {

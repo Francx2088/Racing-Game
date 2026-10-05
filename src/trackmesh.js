@@ -64,8 +64,9 @@ function roadTexture(th) {
 const kerbTexture = (a, b) => canvasTex(16, 64, (g) => { g.fillStyle = css(a); g.fillRect(0, 0, 16, 32); g.fillStyle = css(b); g.fillRect(0, 32, 16, 32); }, { repeat: true });
 
 const arrowTex = () => canvasTex(128, 256, (g, w, h) => {
-  g.fillStyle = '#021'; g.fillRect(0, 0, w, h);
-  g.fillStyle = '#18ffb0';
+  g.fillStyle = 'rgba(0,28,20,0.62)'; g.fillRect(0, 0, w, h);
+  g.strokeStyle = 'rgba(24,255,176,0.9)'; g.lineWidth = 6; g.strokeRect(3, 3, w - 6, h - 6);
+  g.fillStyle = '#18ffb0'; g.shadowColor = '#18ffb0'; g.shadowBlur = 12;
   for (let k = 0; k < 2; k++) { const y = k * 128; g.beginPath(); g.moveTo(w / 2, y + 10); g.lineTo(w - 14, y + 70); g.lineTo(w - 38, y + 70); g.lineTo(w / 2, y + 36); g.lineTo(38, y + 70); g.lineTo(14, y + 70); g.closePath(); g.fill(); }
 }, { repeat: true });
 

@@ -78,7 +78,12 @@ export function buildWorld(levelDef) {
     const y = th.cloudFloor ?? (th.water ? th.water.y - 0.2 : (terrain ? -22 : -2));
     const farColor = th.cloudFloor != null ? 0xf0d8ff : (th.flatGround ? 0x0b0718 : th.fog[0]);
     if (!th.water) {
-      const m = new THREE.Mesh(new THREE.PlaneGeometry(9000, 9000), new THREE.MeshBasicMaterial({ color: farColor }));
+      let mat = new THREE.MeshBasicMaterial({ color: farColor });
+      if (th.cloudFloor != null) {
+        const tex = canvasTex(512, 512, (g, w, h) => { g.fillStyle = '#7a52d8'; g.fillRect(0, 0, w, h); const q = rng(4); for (let i = 0; i < 420; i++) { const x = q() * w, y = q() * h, rr = 14 + q() * 46; for (const ox of [-w, 0, w]) for (const oy of [-h, 0, h]) { const gr = g.createRadialGradient(x + ox, y + oy, 0, x + ox, y + oy, rr); const c = ['255,255,255', '255,190,240', '200,170,255'][i % 3]; gr.addColorStop(0, `rgba(${c},0.55)`); gr.addColorStop(1, `rgba(${c},0)`); g.fillStyle = gr; g.fillRect(x + ox - rr, y + oy - rr, rr * 2, rr * 2); } } }, { repeat: true });
+        tex.repeat.set(45, 45); mat = new THREE.MeshBasicMaterial({ map: tex });
+      }
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(9000, 9000), mat);
       m.rotation.x = -Math.PI / 2; m.position.y = y; scene.add(m);
     }
   }
