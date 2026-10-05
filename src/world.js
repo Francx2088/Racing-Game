@@ -59,8 +59,8 @@ export function buildWorld(levelDef, renderer) {
   let sunSpr = null;
   if (th.sky.elev > -1) {
     const t = canvasTex(128, 128, (g) => { const gr = g.createRadialGradient(64, 64, 0, 64, 64, 64); gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.08, 'rgba(255,255,255,0.9)'); gr.addColorStop(0.25, 'rgba(255,255,255,0.25)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = gr; g.fillRect(0, 0, 128, 128); });
-    sunSpr = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, color: th.sun.color, fog: false, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: th.glare ?? 0.8 }));
-    sunSpr.scale.setScalar(900); sunSpr.renderOrder = -9; scene.add(sunSpr);
+    sunSpr = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, color: th.sun.color, fog: false, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: (th.glare ?? 0.8) * 0.35 }));
+    sunSpr.scale.setScalar(380); sunSpr.renderOrder = -9; scene.add(sunSpr);
   }
 
   // ---- lights (+ real-time shadows around the player) ----

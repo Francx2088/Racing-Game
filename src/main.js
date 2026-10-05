@@ -47,7 +47,7 @@ function initComposer() {
   const rt = new THREE.WebGLRenderTarget(innerWidth, innerHeight, { type: THREE.HalfFloatType, samples: 4 });
   composer = new EffectComposer(renderer, rt); composer.setPixelRatio(pixelRatio); composer.setSize(innerWidth, innerHeight);
   renderPass = new RenderPass(new THREE.Scene(), raceCam); composer.addPass(renderPass);
-  bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.22, 0.5, 1.15); composer.addPass(bloom);
+  bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.2, 0.45, 1.6); composer.addPass(bloom);
   composer.addPass(new OutputPass());
 }
 
