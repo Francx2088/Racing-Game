@@ -57,7 +57,8 @@ export function buildWorld(levelDef, renderer) {
   }
   // sun glare
   let sunSpr = null;
-  if (th.sky.elev > -1) {
+  const glareDir = th.glareSun ? lightDir : sunDir;
+  if (th.sky.elev > -1 || th.glareSun) {
     const t = canvasTex(128, 128, (g) => { const gr = g.createRadialGradient(64, 64, 0, 64, 64, 64); gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.08, 'rgba(255,255,255,0.9)'); gr.addColorStop(0.25, 'rgba(255,255,255,0.25)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = gr; g.fillRect(0, 0, 128, 128); });
     sunSpr = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, color: th.sun.color, fog: false, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: (th.glare ?? 0.8) * 0.35 }));
     sunSpr.scale.setScalar(380); sunSpr.renderOrder = -9; scene.add(sunSpr);
@@ -126,7 +127,7 @@ export function buildWorld(levelDef, renderer) {
     scene, track, th, tm, weather, levelDef, sun, hemi, exposure: th.exposure, heightAt: () => -1000,
     update(dt, t, camera, focus) {
       sky.position.copy(camera.position);
-      if (sunSpr) sunSpr.position.copy(sunDir).multiplyScalar(2300).add(camera.position);
+      if (sunSpr) sunSpr.position.copy(glareDir).multiplyScalar(2300).add(camera.position);
       if (stars) stars.position.copy(camera.position);
       for (const m of seas) { m.position.x = camera.position.x; m.position.z = camera.position.z; m.material.uniforms.uTime.value = t; m.material.uniforms.uCam.value.copy(camera.position); }
       if (focus) { sun.target.position.copy(focus); sun.position.copy(focus).addScaledVector(shadowDir, 200); }

@@ -234,7 +234,7 @@ THEMES.isles = {
 // ============ 8. STRATOSPHERE ============
 THEMES.stratos = {
   accent: 0x6f9bff, bgm: { root: 130.8, scale: 'pent', bpm: 108 }, stars: true, card: [0x000008, 0x0a1a4a, 0x4a8aff],
-  sky: { turb: 0.5, ray: 0.12, mie: 0.0008, mieG: 0.7, elev: 24, azim: 60 },
+  sky: { turb: 2, ray: 0.5, mie: 0.002, mieG: 0.7, elev: -3, azim: 60 }, light: { elev: 24, azim: 60 }, glareSun: true,
   fog: [0x16306a, 400, 3000], sun: { color: 0xffffff, int: 4.0 }, hemi: [0x5a7aff, 0x203060, 0.45], exposure: 0.7, envInt: 0.9, glare: 1.0, envFloor: 0.5,
   clouds: [{ y: -330, color: 0xdfe8ff, shade: 0x5f78b8, density: 0.5, alpha: 0.9, scale: 0.0007, speed: 0.4 }],
   road: { base: 0x30323a, line: 0xe8ecff, kerbA: 0x3d6bff, kerbB: 0xffffff, shoulder: 0x42454e, wallA: 0xd8deea, wallB: 0x3d6bff, barrier: 'glass', deck: 0xb8bfd0, env: 1.3, wallGlow: 0x6f9bff, underglow: 0x3d6bff },
