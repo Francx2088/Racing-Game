@@ -71,7 +71,7 @@ const arrowTex = () => canvasTex(128, 256, (g, w, h) => {
 }, { repeat: true });
 
 const ZONE = {
-  ice: { c: '#bfe9ff', a: 0.85, noise: '#ffffff' }, sand: { c: '#d9b56a', a: 0.9, noise: '#f0d89a' }, oil: { c: '#101018', a: 0.9, noise: '#334' },
+  ice: { c: '#7fe3ff', a: 0.92, noise: '#ffffff' }, sand: { c: '#d9b56a', a: 0.9, noise: '#f0d89a' }, oil: { c: '#101018', a: 0.9, noise: '#334' },
   mud: { c: '#5a3a1f', a: 0.92, noise: '#7a5330' }, syrup: { c: '#9b2d8f', a: 0.88, noise: '#d65bd0' }, dust: { c: '#8a8a92', a: 0.9, noise: '#bbbbc4' },
   leaves: { c: '#c8641a', a: 0.9, noise: '#f0a020' },
 };

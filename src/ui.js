@@ -70,7 +70,7 @@ export class UI {
         <div class="swatches">${sw}</div>
         <div class="row" style="justify-content:center">
           <button class="btn small" id="g-rand"><span>🎲 Surprise paint</span></button>
-          ${owned ? `<button class="btn primary" id="g-race"><span>${save.car === def.id ? '✔ Race with this' : 'Select'}</span></button>` : `<button class="btn gold" id="g-buy" ${save.coins < def.price ? 'disabled' : ''}><span>Unlock · ${def.price} <i class="coin"></i></span></button>`}
+          ${owned ? `<button class="btn primary" id="g-race"><span>${save.car === def.id ? '✔ Selected' : 'Select'}</span></button>` : `<button class="btn gold" id="g-buy" ${save.coins < def.price ? 'disabled' : ''}><span>Unlock · ${def.price} <i class="coin"></i></span></button>`}
         </div>
       </div>`;
     $('#g-back', el).onclick = () => this.h.back();

@@ -87,7 +87,7 @@ const garage = (() => {
     },
     update(dt, mode) {
       t += dt; turn.rotation.y += dt * 0.5; rings[0].rotation.z = t * 0.3;
-      const portrait = innerWidth < innerHeight; const dist = portrait ? 12.5 : 8.6;
+      const aspect = innerWidth / innerHeight, portrait = aspect < 1; const dist = Math.max(8.6, 5.8 / (0.65 * aspect));
       const cy = mode === 'garage' ? 1.35 : 1.0;
       garageCam.position.set(Math.sin(t * 0.25) * 1.2, 1.9 + (portrait ? 0.6 : 0), dist);
       garageCam.lookAt(0, mode === 'garage' ? 0.1 : 0.55, 0);
