@@ -259,9 +259,9 @@ THEMES.stratos = {
         }`,
     });
     const earth = new THREE.Mesh(new THREE.SphereGeometry(9000, 96, 64), earthMat); earth.position.set(ctx.cx, -9400, ctx.cz); earth.renderOrder = -7; ctx.scene.add(earth);
-    const atm = new THREE.Mesh(new THREE.SphereGeometry(9250, 64, 48), new THREE.ShaderMaterial({ transparent: true, depthWrite: false, side: THREE.BackSide, blending: THREE.AdditiveBlending,
+    const atm = new THREE.Mesh(new THREE.SphereGeometry(9250, 64, 48), new THREE.ShaderMaterial({ transparent: true, depthWrite: false, side: THREE.FrontSide, blending: THREE.AdditiveBlending,
       vertexShader: 'varying vec3 vN; varying vec3 vP; void main(){ vN=normalize(mat3(modelMatrix)*normal); vP=(modelMatrix*vec4(position,1.)).xyz; gl_Position=projectionMatrix*viewMatrix*modelMatrix*vec4(position,1.); }',
-      fragmentShader: 'varying vec3 vN; varying vec3 vP; void main(){ vec3 V=normalize(cameraPosition-vP); float f=pow(1.0-abs(dot(V,vN)),4.0); gl_FragColor=vec4(vec3(0.3,0.55,1.0)*f*1.4, f);\n #include <tonemapping_fragment>\n #include <colorspace_fragment>\n }' }));
+      fragmentShader: 'varying vec3 vN; varying vec3 vP; void main(){ vec3 V=normalize(cameraPosition-vP); float f=pow(1.0-abs(dot(V,vN)),5.0); gl_FragColor=vec4(vec3(0.3,0.55,1.0)*f*0.9, f*0.8);\n #include <tonemapping_fragment>\n #include <colorspace_fragment>\n }' }));
     atm.position.copy(earth.position); atm.renderOrder = -6; ctx.scene.add(atm);
     // satellites & debris
     const sat = merge([part(box(3, 2, 3), 0xd0a040, { p: [0, 0, 0] }), part(box(12, 0.15, 3.2), 0x1a3a9a, { p: [-8, 0, 0] }), part(box(12, 0.15, 3.2), 0x1a3a9a, { p: [8, 0, 0] }), part(cyl(0.15, 0.15, 5, 6), 0xcccccc, { p: [0, 3.5, 0] }), part(sph(1.2, 10, 6), 0xdddddd, { p: [0, 6.2, 0] })]);
