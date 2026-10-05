@@ -54,3 +54,21 @@ export const fmtTime = (t) => {
 };
 export const ordinal = (n) => n + (['th', 'st', 'nd', 'rd'][(n % 100 > 10 && n % 100 < 14) ? 0 : (n % 10 < 4 ? n % 10 : 0)]);
 export const hex = (n) => '#' + n.toString(16).padStart(6, '0');
+
+// 3D value noise (0..1) with fbm.
+export function makeNoise3(seed) {
+  const r = rng(seed), N = 256, perm = new Uint8Array(N * 2), vals = new Float32Array(N);
+  for (let i = 0; i < N; i++) { perm[i] = i; vals[i] = r(); }
+  for (let i = N - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [perm[i], perm[j]] = [perm[j], perm[i]]; }
+  for (let i = 0; i < N; i++) perm[i + N] = perm[i];
+  const h = (x, y, z) => vals[perm[perm[perm[x & 255] + (y & 255)] + (z & 255)]];
+  const n = (x, y, z) => {
+    const xi = Math.floor(x), yi = Math.floor(y), zi = Math.floor(z), xf = x - xi, yf = y - yi, zf = z - zi;
+    const u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf), w = zf * zf * (3 - 2 * zf);
+    return lerp(
+      lerp(lerp(h(xi, yi, zi), h(xi + 1, yi, zi), u), lerp(h(xi, yi + 1, zi), h(xi + 1, yi + 1, zi), u), v),
+      lerp(lerp(h(xi, yi, zi + 1), h(xi + 1, yi, zi + 1), u), lerp(h(xi, yi + 1, zi + 1), h(xi + 1, yi + 1, zi + 1), u), v), w);
+  };
+  n.fbm = (x, y, z, oct = 4) => { let a = 0.5, f = 1, s = 0, t = 0; for (let i = 0; i < oct; i++) { s += a * n(x * f, y * f, z * f); t += a; a *= 0.5; f *= 2.03; } return s / t; };
+  return n;
+}

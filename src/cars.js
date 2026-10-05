@@ -80,7 +80,7 @@ const FRAG_BODY = `
   diffuseColor.rgb = mix(diffuseColor.rgb, painted, uStrength);
 `;
 
-let glowTex, shadowTex;
+let glowTex, shadowTex, beamTex;
 function radialTexture(inner, outer) {
   const c = document.createElement('canvas'); c.width = c.height = 128;
   const g = c.getContext('2d'); const gr = g.createRadialGradient(64, 64, 4, 64, 64, 62);
@@ -172,13 +172,14 @@ export function buildCar(tpl, livery) {
     }
   });
 
+  model.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
   // wheel rig
   const wheels = rigWheels(def, model);
 
   // blob shadow + underglow
   shadowTex = shadowTex || radialTexture('rgba(0,0,0,0.65)', 'rgba(0,0,0,0)');
   glowTex = glowTex || radialTexture('rgba(255,255,255,1)', 'rgba(255,255,255,0)');
-  const shadow = new THREE.Mesh(new THREE.PlaneGeometry(tpl.half.x * 2.9, tpl.half.z * 2.5), new THREE.MeshBasicMaterial({ map: shadowTex, transparent: true, depthWrite: false, fog: true }));
+  const shadow = new THREE.Mesh(new THREE.PlaneGeometry(tpl.half.x * 2.9, tpl.half.z * 2.5), new THREE.MeshBasicMaterial({ map: shadowTex, transparent: true, opacity: 0.45, depthWrite: false, fog: true }));
   shadow.rotation.x = -Math.PI / 2; shadow.position.y = 0.05; shadow.renderOrder = 2;
   root.add(shadow);
   const glowMat = new THREE.MeshBasicMaterial({ map: glowTex, color: livery.glow || 0x66ccff, transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending, depthWrite: false, fog: true });
@@ -191,8 +192,19 @@ export function buildCar(tpl, livery) {
   tail.position.set(0, tpl.height * 0.52, -tpl.half.z - 0.03); tail.rotation.y = Math.PI;
   root.add(tail);
 
+  // headlights: glow sprites + soft beams on the road ahead (visible mostly at night / in storms)
+  beamTex = beamTex || (() => { const c = document.createElement('canvas'); c.width = 64; c.height = 128; const g = c.getContext('2d'); const gr = g.createLinearGradient(0, 128, 0, 0); gr.addColorStop(0, 'rgba(255,244,214,0.55)'); gr.addColorStop(1, 'rgba(255,244,214,0)'); g.fillStyle = gr; g.beginPath(); g.moveTo(26, 128); g.lineTo(38, 128); g.lineTo(64, 0); g.lineTo(0, 0); g.closePath(); g.fill(); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t; })();
+  const beamMat = new THREE.MeshBasicMaterial({ map: beamTex, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, fog: true });
+  const lights = new THREE.Group();
+  for (const sx of [-1, 1]) {
+    const b = new THREE.Mesh(new THREE.PlaneGeometry(5.5, 26), beamMat); b.rotation.x = -Math.PI / 2; b.rotation.z = sx * 0.04; b.position.set(sx * tpl.half.x * 0.62, 0.12, tpl.half.z + 13.5); b.renderOrder = 4; lights.add(b);
+    const h = new THREE.Mesh(new THREE.SphereGeometry(0.17, 8, 6), new THREE.MeshBasicMaterial({ color: 0xfff1cc })); h.position.set(sx * tpl.half.x * 0.62, tpl.height * 0.36, tpl.half.z - 0.12); h.scale.z = 0.6; lights.add(h);
+  }
+  root.add(lights);
+
   return {
-    root, body, wheels, glow, shadow, tail, livery, uniformSets, def,
+    root, body, wheels, glow, shadow, tail, livery, uniformSets, def, beamMat,
+    setBeam(k) { beamMat.opacity = k; },
     setSteer(s) { for (const w of wheels) if (w.steer) w.steer.rotation.y = -s * 0.45; },
     spin(dist) { for (const w of wheels) w.spin.rotation.x += dist / 0.34; },
   };

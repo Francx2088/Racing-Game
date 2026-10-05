@@ -4,7 +4,7 @@ import { clamp, lerp, wrapAngle, rng } from './util.js';
 const G_DEFAULT = 24;
 const SURF = {
   ice: { grip: 0.1, vcap: 1 }, sand: { grip: 0.6, vcap: 0.72 }, oil: { grip: 0.08, vcap: 1 }, mud: { grip: 0.5, vcap: 0.6 },
-  syrup: { grip: 0.45, vcap: 0.62 }, dust: { grip: 0.65, vcap: 0.85 }, leaves: { grip: 0.6, vcap: 0.95 },
+  syrup: { grip: 0.45, vcap: 0.62 }, wet: { grip: 0.5, vcap: 0.95 }, ash: { grip: 0.7, vcap: 0.88 }, dust: { grip: 0.65, vcap: 0.85 }, leaves: { grip: 0.6, vcap: 0.95 },
 };
 const OFFROAD = { grip: 0.65, vcap: 0.66 };
 

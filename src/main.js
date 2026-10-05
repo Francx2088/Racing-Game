@@ -1,4 +1,8 @@
 import * as THREE from 'three';
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import platform from './platform.js';
 import audio from './audio.js';
@@ -13,7 +17,7 @@ import { rng, clamp, lerp, wrapAngle, fmtTime, smooth } from './util.js';
 import { canvasTex } from './kit.js';
 
 const params = new URLSearchParams(location.search);
-const DEBUG = { level: params.get('level'), auto: params.has('auto'), unlock: params.has('unlock'), fps: params.has('fps'), laps: params.get('laps'), touch: params.has('touch'), paint: params.get('paint') };
+const DEBUG = { level: params.get('level'), auto: params.has('auto'), unlock: params.has('unlock'), fps: params.has('fps'), laps: params.get('laps'), touch: params.has('touch'), nofx: params.has('nofx'), paint: params.get('paint') };
 
 // ------------------------------------------------------------------ save data
 const defaultSave = () => ({ v: 1, coins: 0, cars: { gr86: true }, car: 'gr86', paints: {}, levels: {}, sfx: true, music: true, runs: 0 });
@@ -28,13 +32,24 @@ audio.musicOn = save.music; audio.sfxOn = save.sfx; audio.enabled = save.music |
 const canvas = document.getElementById('gl');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
 renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.05;
+renderer.shadowMap.enabled = !DEBUG.nofx; renderer.shadowMap.type = THREE.PCFShadowMap;
+// post-processing: HDR scene -> bloom -> tone mapping (the sun, neon and lights glow like on a real camera)
+let composer = null, renderPass = null, bloom = null, fxOn = !DEBUG.nofx;
 let pixelRatio = Math.min(window.devicePixelRatio || 1, 1.75);
 const MAXPR = pixelRatio;
-function resize() { renderer.setPixelRatio(pixelRatio); renderer.setSize(innerWidth, innerHeight, false); const fx = document.getElementById('fxlines'); fx.width = innerWidth / 2; fx.height = innerHeight / 2; for (const c of cameras) { c.aspect = innerWidth / innerHeight; c.updateProjectionMatrix(); } }
+function resize() { renderer.setPixelRatio(pixelRatio); renderer.setSize(innerWidth, innerHeight, false); if (composer) { composer.setPixelRatio(pixelRatio); composer.setSize(innerWidth, innerHeight); } const fx = document.getElementById('fxlines'); fx.width = innerWidth / 2; fx.height = innerHeight / 2; for (const c of cameras) { c.aspect = innerWidth / innerHeight; c.updateProjectionMatrix(); } }
 const raceCam = new THREE.PerspectiveCamera(62, 1, 0.3, 4000), garageCam = new THREE.PerspectiveCamera(36, 1, 0.1, 100);
 const cameras = [raceCam, garageCam];
 addEventListener('resize', resize); resize();
 const env = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
+function initComposer() {
+  if (composer || DEBUG.nofx) return;
+  const rt = new THREE.WebGLRenderTarget(innerWidth, innerHeight, { type: THREE.HalfFloatType, samples: 4 });
+  composer = new EffectComposer(renderer, rt); composer.setPixelRatio(pixelRatio); composer.setSize(innerWidth, innerHeight);
+  renderPass = new RenderPass(new THREE.Scene(), raceCam); composer.addPass(renderPass);
+  bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.22, 0.5, 1.15); composer.addPass(bloom);
+  composer.addPass(new OutputPass());
+}
 
 // ------------------------------------------------------------------ UI
 const ui = new UI(document.getElementById('ui'), {
@@ -159,10 +174,9 @@ async function startRace(levelIndex) {
   ui.showBusy(`Loading ${LEVELS[levelIndex].name}…`); ui.show('none'); mode = 'loading';
   await new Promise((r) => setTimeout(r, 30));
   const L = { ...LEVELS[levelIndex] }; if (DEBUG.laps) L.laps = +DEBUG.laps;
-  const world = buildWorld(L);
-  world.scene.environment = env;
+  const world = buildWorld(L, renderer);
   const th = world.th;
-  renderer.toneMappingExposure = th.exposure ?? 1.05;
+  renderer.toneMappingExposure = th.exposure ?? 0.6; initComposer(); if (bloom) bloom.strength = th.night ? 0.55 : 0.3;
   // particles
   sparks = new Particles(world.scene, 700, true); smoke = new Particles(world.scene, 600, false); flames = new Particles(world.scene, 700, true); dust = new Particles(world.scene, 500, false);
   save.runs++;
@@ -267,9 +281,9 @@ function syncVisuals(dt) {
     v.body.position.y = c.airborne ? 0 : Math.sin(S.t * 55 + c.grid * 3) * 0.006 * clamp(Math.abs(c.speed) / 40, 0, 1);
     v.spin(c.speed * dt); v.setSteer(c.steerState);
     const braking = c.isPlayer ? c.input.brake > 0 : false;
-    v.tail.material.opacity = braking ? 0.9 : 0.25;
+    v.tail.material.opacity = braking ? 0.9 : 0.25; v.setBeam(S.th.night ? 0.9 : S.th.road.wet ? 0.6 : 0.12);
     const glowBoost = (c.boostT > 0 || c.nitroOn) ? 1 : 0;
-    v.glow.material.opacity = lerp(v.glow.material.opacity, (v.livery.stock ? 0.25 : 0.55) + glowBoost * 0.4 + (c.drifting ? 0.3 : 0), 1 - Math.exp(-10 * dt));
+    v.glow.material.opacity = lerp(v.glow.material.opacity, (S.th.night ? 0.35 : 0.1) + glowBoost * 0.4 + (c.drifting ? 0.25 : 0), 1 - Math.exp(-10 * dt));
   }
 }
 const _wp = new THREE.Vector3();
@@ -373,7 +387,7 @@ function frame(now) {
     const avg = fpsAcc / fpsN; fpsAcc = 0; fpsN = 0;
     if (avg > 1 / 38) slow++; else slow = 0;
     if (avg < 1 / 57) fast++; else fast = 0;
-    if (slow >= 2 && pixelRatio > 0.7) { pixelRatio = Math.max(0.7, pixelRatio * 0.85); resize(); slow = 0; }
+    if (slow >= 2 && pixelRatio > 0.7) { pixelRatio = Math.max(0.7, pixelRatio * 0.85); if (pixelRatio < 0.9) { fxOn = false; renderer.shadowMap.enabled = false; } resize(); slow = 0; }
     else if (fast >= 6 && pixelRatio < MAXPR) { pixelRatio = Math.min(MAXPR, pixelRatio * 1.1); resize(); fast = 0; }
     if (fpsEl) fpsEl.textContent = `${(1 / avg).toFixed(0)} fps · pr ${pixelRatio.toFixed(2)} · calls ${renderer.info.render.calls}`;
   }
@@ -391,7 +405,7 @@ function frame(now) {
       // camera & shake decay
       S.shake = Math.max(0, S.shake - dt * 1.6);
       updateCamera(dt);
-      S.world.update(dt, S.t, raceCam);
+      S.world.update(dt, S.t, raceCam, S.race.player.pos3 || (S.race.player.pos3 = new THREE.Vector3()).set(S.race.player.x, S.race.player.y, S.race.player.z));
       sparks.update(dt, innerHeight * renderer.getPixelRatio() * 0.9); smoke.update(dt, innerHeight * renderer.getPixelRatio() * 0.9); flames.update(dt, innerHeight * renderer.getPixelRatio() * 0.9); dust.update(dt, innerHeight * renderer.getPixelRatio() * 0.9);
       // HUD
       const L = S.world.track.length;
@@ -412,9 +426,9 @@ function frame(now) {
       if (S.finishT > 0) { S.finishT += dt; if (S.finishT > 2.6 && !S.over) finishRace(); }
     }
     if (S.debugCam) { raceCam.position.set(...S.debugCam.pos); raceCam.lookAt(...S.debugCam.look); if (S.debugCam.fov) { raceCam.fov = S.debugCam.fov; raceCam.updateProjectionMatrix(); } }
-    renderer.render(S.world.scene, raceCam);
+    if (fxOn && composer) { renderPass.scene = S.world.scene; renderPass.camera = raceCam; composer.render(); } else renderer.render(S.world.scene, raceCam);
   } else if (mode === 'menu' || mode === 'results' || mode === 'loading') {
-    if (mode === 'results' && S) { S.world.update(dt, (S.t += dt), raceCam); S.race.update(dt, { steer: 0, throttle: 0, brake: 0, drift: false, nitro: false }); syncVisuals(dt); updateCamera(dt); renderer.render(S.world.scene, raceCam); }
+    if (mode === 'results' && S) { S.world.update(dt, (S.t += dt), raceCam, tmpV.set(S.race.player.x, S.race.player.y, S.race.player.z)); S.race.update(dt, { steer: 0, throttle: 0, brake: 0, drift: false, nitro: false }); syncVisuals(dt); updateCamera(dt); if (fxOn && composer) { renderPass.scene = S.world.scene; renderPass.camera = raceCam; composer.render(); } else renderer.render(S.world.scene, raceCam); }
     else { garage.update(dt, menuMode); renderer.render(garage.scene, garageCam); }
   }
   if (!firstFrame) { firstFrame = true; platform.firstFrameReady(); }

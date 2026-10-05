@@ -52,6 +52,8 @@ let softTex;
 const soft = () => softTex || (softTex = (() => { const c = document.createElement('canvas'); c.width = c.height = 32; const g = c.getContext('2d'); const gr = g.createRadialGradient(16, 16, 0, 16, 16, 16); gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = gr; g.fillRect(0, 0, 32, 32); return new THREE.CanvasTexture(c); })());
 
 const WEATHER = {
+  wisps: { n: 70, size: 20, color: 0xffffff, fall: 0, drift: 0, opacity: 0.14, additive: false, world: true, range: 130 },
+  snowdust: { n: 260, size: 0.35, color: 0xffffff, fall: -1.2, drift: 5, opacity: 0.8, additive: false },
   snow: { n: 700, size: 0.55, color: 0xffffff, fall: -5.5, drift: 1.5, opacity: 0.95, additive: false },
   dust: { n: 260, size: 0.5, color: 0xf3cf9a, fall: -0.2, drift: 9, opacity: 0.4, additive: false },
   embers: { n: 420, size: 0.5, color: 0xff7a2a, fall: 5, drift: 2, opacity: 1, additive: true },
@@ -99,11 +101,19 @@ export class Weather {
       if (W.wander) { x += Math.sin(this.t * 0.7 + ph) * W.drift * dt; z += Math.cos(this.t * 0.6 + ph * 1.3) * W.drift * dt; }
       else { x += (W.drift * (0.6 + Math.sin(ph))) * dt + (W.sway ? Math.sin(this.t * 1.6 + ph) * 2 * dt : 0); z += Math.sin(this.t * 0.5 + ph) * W.drift * 0.4 * dt; }
       y += W.fall * dt * (W.wander ? Math.sin(this.t + ph) : 1);
+      if (W.world) {
+        // world-fixed puffs that wrap around the camera: streaming past gives a strong sense of speed
+        const R = W.range;
+        if (!this.init) { this.p[i * 3] = cx + (Math.random() - 0.5) * R * 2; this.p[i * 3 + 1] = cy + (Math.random() - 0.5) * 70; this.p[i * 3 + 2] = cz + (Math.random() - 0.5) * R * 2; x = this.p[i * 3]; y = this.p[i * 3 + 1]; z = this.p[i * 3 + 2]; }
+        if (x - cx > R) x -= R * 2; else if (x - cx < -R) x += R * 2; if (z - cz > R) z -= R * 2; else if (z - cz < -R) z += R * 2; if (y - cy > 40) y -= 80; else if (y - cy < -40) y += 80;
+        this.p[i * 3] = x; this.p[i * 3 + 1] = y; this.p[i * 3 + 2] = z; this.pos[i * 3] = x; this.pos[i * 3 + 1] = y; this.pos[i * 3 + 2] = z; continue;
+      }
       if (y < -2) y += 40; else if (y > 38) y -= 40;
       if (x > 45) x -= 90; else if (x < -45) x += 90; if (z > 45) z -= 90; else if (z < -45) z += 90;
       this.p[i * 3] = x; this.p[i * 3 + 1] = y; this.p[i * 3 + 2] = z;
       this.pos[i * 3] = x + cx + fwd.x * 25; this.pos[i * 3 + 1] = y + cy - 10; this.pos[i * 3 + 2] = z + cz + fwd.z * 25;
     }
+    this.init = true;
     this.obj.geometry.attributes.position.needsUpdate = true;
   }
   dispose() { if (this.obj) { this.scene.remove(this.obj); this.obj.geometry.dispose(); this.obj.material.dispose(); } }

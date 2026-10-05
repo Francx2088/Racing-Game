@@ -87,7 +87,7 @@ export class UI {
     const el = this.screens.levels;
     const cards = LEVELS.map((L, i) => {
       const th = THEMES[L.theme], rec = save.levels[L.id] || {}, unlocked = this.h.isUnlocked(i);
-      const g = `linear-gradient(135deg, ${hexStr(th.sky[0])}, ${hexStr(th.sky[1])} 55%, ${hexStr(th.sky[2])})`;
+      const g = `linear-gradient(135deg, ${hexStr(th.card[0])}, ${hexStr(th.card[1])} 55%, ${hexStr(th.card[2])})`;
       const stars = [1, 2, 3].map((n) => `<span class="${(rec.stars || 0) >= n ? '' : 'off'}">★</span>`).join('');
       return `<div class="card ${unlocked ? '' : 'locked'}" data-i="${i}" style="background:${g}">
         ${this.thumbs[i]}

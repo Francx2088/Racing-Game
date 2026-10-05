@@ -40,22 +40,28 @@ Gamepad is supported too (left stick, RT/A gas, LT/B brake, X drift, Y nitro).
 * **Progression** – podium stars unlock the next track, coins unlock the 4 cars and the paint shop.
 * Rubber-banding AI that gets sharper every level (0.80 → 1.02 of your top speed).
 
-## The 10 tracks
+## The 10 sky worlds
 
-| # | Track | Terrain / twist |
+Every track is a road **floating in the sky** — a concrete box-girder deck on pylons that vanish into the clouds, with crash barriers, lamp posts and real-time shadows.
+
+| # | Track | Atmosphere |
 |---|---|---|
-| 1 | Sunset Bay | beach causeway, palms, lighthouse, ocean |
-| 2 | Dust Canyon | desert mesas, cacti, sand drifts, rock arches |
-| 3 | Neon Grid | night city, right-angle blocks, rain, glowing walls, oil slicks |
-| 4 | Frostbite Peak | snow, ice patches (almost no grip), aurora, snowfall |
-| 5 | Jungle Twist | tight twisty muddy loop, giant trees, glowing mushrooms, fireflies |
-| 6 | Magma Run | causeway over lava, spires, ember rain, volcano on the horizon |
-| 7 | Sugar Rush | candy land: lollipops, donuts, cupcakes, syrup puddles, jumps |
-| 8 | Lunar Leap | moon craters, **low gravity** big jumps, Earth in the sky |
-| 9 | Highland Pass | autumn hills with big elevation changes, barns, fences, falling leaves |
-| 10 | Rainbow Skyway | floating rainbow road above the clouds, banked turns, rings, islands |
+| 1 | Sunset Summit | golden hour, glowing sea of clouds, floating grass islands |
+| 2 | Alpine Ridge | clear noon, weaving between snow-capped peaks, ice patches |
+| 3 | Thunderhead | storm front: dark cumulonimbus, lightning, rain, wet reflective road |
+| 4 | Midnight Metropolis | night, skyscrapers glowing below the clouds, neon signs, glass barriers |
+| 5 | Aurora Drift | polar night, aurora, floating icebergs, snowfall |
+| 6 | Ember Skies | volcanic sunset, lava glowing through the clouds, drifting embers |
+| 7 | Paradise Isles | tropical floating islands with palms and waterfalls |
+| 8 | Stratosphere | edge of space, curved Earth with atmosphere rim, satellites, low gravity |
+| 9 | Sandstone Spires | dawn over floating sandstone spires and desert far below |
+| 10 | Cloud Kingdom | god rays, rainbow, marble ruins, golden rings |
 
-Every level has its own layout, palette, fog, sky, terrain generator, scenery, weather, soundtrack scale and tempo.
+### How it looks realistic
+* **Physically based sky** (Preetham/Rayleigh-Mie scattering) per level, and the *same sky is baked into the reflection map*, so cars, glass and wet asphalt reflect the real sky of that level.
+* Animated, sun-lit **cloud seas** (two layers, parallax) + instanced cumulus + fast **cloud wisps** streaming past for speed.
+* **PBR asphalt** generated procedurally (grain, tyre-wear lanes with different roughness, seams, cracks, skid marks, worn paint) with normal + roughness maps.
+* Real-time **shadow maps** that follow the player, HDR **bloom** and filmic tone mapping, headlight beams at night/storms.
 
 ## One set of cars, endless looks
 
@@ -76,9 +82,9 @@ src/main.js       boot, input, game loop, camera, effects, race flow, save data
 src/race.js       arcade physics, drift/boost, AI drivers, laps, pickups, standings (no rendering)
 src/levels.js     the 10 track layouts + gameplay tuning
 src/track.js      spline sampling, banking, nearest-point queries, procedural pickups/hazards
-src/trackmesh.js  road, kerbs, walls, start gantry, pads, ramps, coins, obstacles
-src/terrain.js    heightfield that hugs the track
-src/themes.js     palette, terrain, scenery & weather for each level
+src/trackmesh.js  road, deck, barriers, lamps, pylons, start gantry, pads, ramps, coins, obstacles
+src/sky.js        cloud sea shader, cumulus, rock islands, mountain peaks, PBR asphalt textures
+src/themes.js     sky, clouds, lighting, road look, scenery & weather for each level
 src/world.js      builds a complete level scene
 src/cars.js       model loading, wheel rigs, livery shader
 src/fx.js         particles + weather
@@ -89,7 +95,7 @@ src/platform.js   host adapter (save data, score, pause/resume) — the only fil
 
 ### Debug URL flags
 
-`?level=N` jump into track N (0-9) · `?unlock=1` unlock everything · `?auto=1` let the AI drive you · `?laps=1` · `?touch=1` force touch UI · `?fps` show fps.
+`?level=N` jump into track N (0-9) · `?unlock=1` unlock everything · `?auto=1` let the AI drive you · `?laps=1` · `?touch=1` force touch UI · `?fps` show fps · `?nofx` disable bloom/shadows.
 
 ## YouTube Playables
 
