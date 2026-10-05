@@ -71,7 +71,7 @@ function peaks(ctx, { count, minD, maxD, baseY, w = [120, 260], h = [180, 420], 
   for (let k = 0; k < ring; k++) { const a = (k / ring) * 6.28 + r() * 0.3, rad = ringR + r() * 250; add(ctx.cx + Math.cos(a) * rad, ctx.cz + Math.sin(a) * rad, (r() * variants) | 0); }
   const mat = rockMat(); geos.forEach((g, k) => ctx.place(g, mat, buckets[k]));
 }
-function cumulusField(ctx, { count, minD = 60, maxD = 800, minY = -60, maxY = 120, size = [60, 160], tint, shade, opacity = 0.92, sy = 0.62 }) {
+function cumulusField(ctx, { count, minD = 110, maxD = 800, minY = -60, maxY = 120, size = [60, 160], tint, shade, opacity = 0.92, sy = 0.62 }) {
   const { r } = ctx; const list = ctx.volume({ count, minD, maxD, minY, maxY, spacing: 30 }, (x, y, z) => ({ x, y, z, s: size[0] + r() * (size[1] - size[0]), sy: sy * (0.8 + r() * 0.5) }));
   ctx.cumulus(list, { tint, shade, opacity, seed: 3 });
 }
@@ -100,13 +100,13 @@ THEMES.golden = {
 THEMES.alps = {
   accent: 0x7fd4ff, bgm: { root: 220, scale: 'major', bpm: 112 }, card: [0x2f7fd8, 0x9bd0ff, 0xffffff],
   sky: { turb: 2.2, ray: 1.6, mie: 0.004, mieG: 0.8, elev: 46, azim: 140 },
-  fog: [0xbcd8f0, 220, 1700], sun: { color: 0xfff4e0, int: 3.2 }, hemi: [0xbcd8ff, 0xcfd8e0, 0.7], exposure: 0.5, envInt: 1.0, glare: 0.5,
+  fog: [0x9cc4ea, 300, 2200], sun: { color: 0xfff4e0, int: 2.4 }, hemi: [0x9cc4ff, 0xaab8c8, 0.45], exposure: 0.42, envInt: 1.0, glare: 0.5,
   clouds: [{ y: -125, color: 0xffffff, shade: 0xaabbd2, density: 0.55, alpha: 0.98, scale: 0.0014 }, { y: -240, color: 0xeaf1fa, shade: 0x8aa0c0, density: 0.5, alpha: 0.95, scale: 0.001, speed: 0.6 }],
   road: { base: 0x3d3f45, line: 0xf4f4f4, kerbA: 0x1565c0, kerbB: 0xf5f5f5, shoulder: 0x6a6d72, wallA: 0xc8cdd2, wallB: 0xc8cdd2, barrier: 'rail', deck: 0xb5b7b8, env: 0.7 },
   weather: ['wisps', 'snowdust'],
   build(ctx) {
     peaks(ctx, { count: 26, minD: 85, maxD: 640, baseY: -190, w: [110, 260], h: [230, 470], seed: 2, variants: 5, geo: { rock: [0x59534e, 0x847a70], snowLine: 0.5 }, ring: 18, ringR: 900 });
-    cumulusField(ctx, { count: 40, minY: -90, maxY: 40, size: [60, 150], tint: 0xffffff, shade: 0x9fb3cc });
+    cumulusField(ctx, { count: 40, minD: 140, minY: -130, maxY: -50, size: [60, 150], tint: 0xffffff, shade: 0x9fb3cc });
     gatesEvery(ctx, 3, { kind: 'arch', color: 0xcfd4da, glow: 0x7fd4ff, metal: true });
   },
 };
@@ -131,7 +131,7 @@ THEMES.storm = {
     ctx.anim.push((dt, t, cam) => {
       if (t > nextT) { nextT = t + 2.5 + r() * 6; flash = 1; const a = r() * 6.28, d = 160 + r() * 250; bolt.position.set(cam.position.x + Math.cos(a) * d, 0, cam.position.z + Math.sin(a) * d); bolt.visible = true; mat.opacity = 1; ctx.bolt = true; }
       flash = Math.max(0, flash - dt * 4); const f = flash > 0.55 ? 1 : flash > 0.3 ? 0.2 : flash > 0.15 ? 0.7 : 0;
-      ctx.hemi.intensity = base + f * 1.6; mat.opacity = f; if (flash <= 0) bolt.visible = false;
+      ctx.hemi.intensity = base + f * 0.7; mat.opacity = f; if (flash <= 0) bolt.visible = false;
     });
     gatesEvery(ctx, 3, { kind: 'arch', color: 0x555b66, glow: 0x9ab8ff, metal: true });
   },

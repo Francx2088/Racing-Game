@@ -72,7 +72,7 @@ export function cloudPuffs(list, { tint = 0xffffff, shade = 0x8890a8, fog, opaci
         float sx=length(vec3(instanceMatrix[0])), sy=length(vec3(instanceMatrix[1])); c.xy += position.xy*vec2(sx,sy); vD=-c.z; gl_Position=projectionMatrix*c; }`,
     fragmentShader: `uniform sampler2D uMap; uniform vec3 uTint,uShade,uFog; uniform float uFogNear,uFogFar,uOp; varying vec2 vUv; varying float vD;
       void main(){ vec4 t = texture2D(uMap, vUv); vec3 col = mix(uShade, uTint, t.r); float f = smoothstep(uFogNear,uFogFar,vD); col = mix(col,uFog,f*0.85);
-        float near = smoothstep(8.,60.,vD); gl_FragColor = vec4(col, t.a*uOp*near*(1.-0.35*f));
+        float near = smoothstep(30.,160.,vD); gl_FragColor = vec4(col, t.a*uOp*near*(1.-0.35*f));
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
       }`,

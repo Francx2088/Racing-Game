@@ -198,7 +198,7 @@ export function buildTrackMeshes(track, th, group) {
   // ramps
   const rampMat = new THREE.MeshLambertMaterial({ color: R.ramp ?? 0xffb020, side: THREE.DoubleSide });
   const stripeTex = canvasTex(64, 64, (g) => { g.fillStyle = '#ffcc22'; g.fillRect(0, 0, 64, 64); g.fillStyle = '#222'; for (let i = -1; i < 3; i++) { g.beginPath(); g.moveTo(i * 32, 0); g.lineTo(i * 32 + 16, 0); g.lineTo(i * 32 + 48, 64); g.lineTo(i * 32 + 32, 64); g.fill(); } }, { repeat: true });
-  const rampTexMat = new THREE.MeshLambertMaterial({ map: stripeTex, side: THREE.DoubleSide });
+  const rampTexMat = new THREE.MeshStandardMaterial({ map: stripeTex, color: 0xb0b0b0, roughness: 0.7, side: THREE.DoubleSide });
   for (const q of track.ramps) {
     const n = 8, verts = [], uvs = [], ind = [];
     for (let k = 0; k <= n; k++) {
