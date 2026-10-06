@@ -124,10 +124,10 @@ const garage = (() => {
     },
     update(dt) {
       t += dt; turn.rotation.y += dt * 0.35;
-      const aspect = innerWidth / innerHeight, dist = Math.max(8.6, 5.8 / (0.65 * aspect));
-      garageCam.position.set(Math.sin(t * 0.2) * 1.1, 2.0 + (aspect < 1 ? 0.6 : 0), dist);
+      const aspect = innerWidth / innerHeight, dist = Math.max(10.5, 6.4 / (0.65 * aspect));
+      garageCam.position.set(Math.sin(t * 0.2) * 1.1, 2.2 + (aspect < 1 ? 0.6 : 0), dist);
       garageCam.lookAt(0, 0.2, 0);
-      garageCam.setViewOffset(innerWidth, innerHeight, 0, innerHeight * 0.13, innerWidth, innerHeight);
+      garageCam.setViewOffset(innerWidth, innerHeight, 0, innerHeight * 0.26, innerWidth, innerHeight);
       if (car) car.spin(dt * 3);
     },
   };
