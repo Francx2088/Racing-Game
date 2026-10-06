@@ -86,7 +86,9 @@ export function buildWorld(levelDef, renderer) {
     events, track, th, group, r, noise, wd: track.wallD, scene, sunDir, lightDir, hemi, sun, anim, cx, cz, bounds,
     place(geo, mat, list, { cast = false } = {}) { const im = instances(geo, mat, list); im.castShadow = cast; group.add(im); return im; },
     // random points in the 3D volume around the track. cb(x,y,z) -> instance | null
-    volume(o, cb) {
+    volume(o0, cb) {
+      // scenery density is tuned per 2 km of road
+      const o = { ...o0, count: o0.fixed ? o0.count : Math.round(o0.count * Math.max(1, track.length / 2000)) };
       const out = [], tries = o.tries ?? o.count * 20, N = track.N, placed = [];
       for (let t = 0; t < tries && out.length < o.count; t++) {
         const i = (r() * N) | 0, a = r() * 6.28, d = o.minD + r() * (o.maxD - o.minD);
@@ -126,7 +128,7 @@ export function buildWorld(levelDef, renderer) {
 
   return {
     scene, track, th, tm, weather, levelDef, events, sun, hemi, exposure: th.exposure, heightAt: () => -1000,
-    update(dt, t, camera, focus) {
+    update(dt, t, camera, focus, raceT = t) {
       sky.position.copy(camera.position);
       if (sunSpr) sunSpr.position.copy(glareDir).multiplyScalar(2300).add(camera.position);
       if (stars) stars.position.copy(camera.position);
@@ -134,7 +136,7 @@ export function buildWorld(levelDef, renderer) {
       if (focus) { sun.target.position.copy(focus); sun.position.copy(focus).addScaledVector(shadowDir, 200); }
       for (const f of anim) f(dt, t, camera);
       for (const f of tm.anim) f(t);
-      tm.updatePickups(t);
+      tm.updatePickups(t, raceT);
       for (const w of weather) w.update(dt, camera);
     },
     dispose() {

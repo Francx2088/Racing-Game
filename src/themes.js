@@ -45,7 +45,8 @@ function gate(ctx, s, { kind = 'arch', color = 0x888888, glow = 0xffffff, height
   }
   g.position.set(p.x, p.y, p.z); g.rotation.y = p.head; group.add(g);
 }
-const gatesEvery = (ctx, n, opts) => { for (let k = 0; k < n; k++) gate(ctx, (((k + 0.5) / n) * ctx.track.length + 70) % ctx.track.length, opts); };
+// checkpoint gates (the first checkpoint is the start gantry)
+const gatesEvery = (ctx, n, opts) => { for (const s of ctx.track.checkpoints.slice(1)) gate(ctx, s, opts); };
 
 // Scatter floating islands; returns [{x,y,z,R}] and places the instanced rock.
 function islands(ctx, { count, variants = 3, minD = 70, maxD = 520, minY = -90, maxY = 60, size = [25, 80], flatY = 1, geo = {}, seed = 1, spacing = 120, depth = 1.5 }) {
@@ -321,7 +322,7 @@ THEMES.heaven = {
     const t = canvasTex(64, 256, (c, w, h) => { const gr = c.createLinearGradient(0, 0, w, 0); gr.addColorStop(0, 'rgba(255,240,200,0)'); gr.addColorStop(0.5, 'rgba(255,240,200,0.35)'); gr.addColorStop(1, 'rgba(255,240,200,0)'); c.fillStyle = gr; c.fillRect(0, 0, w, h); });
     for (let k = 0; k < 7; k++) { const m = new THREE.Mesh(new THREE.PlaneGeometry(70 + r() * 90, 900), new THREE.MeshBasicMaterial({ map: t, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false, opacity: 0.55 })); const a = r() * 6.28, d = 150 + r() * 600; m.position.set(ctx.cx + Math.cos(a) * d, 100, ctx.cz + Math.sin(a) * d); m.rotation.set(0, r() * 3.14, 0.35); ctx.scene.add(m); }
     const cols2 = [0xffe08a, 0xffd45a, 0xfff0b0];
-    for (let k = 0; k < 8; k++) gate(ctx, ((k + 0.5) / 8) * ctx.track.length + 70, { kind: 'ring', glow: cols2[k % 3] });
+    ctx.track.checkpoints.slice(1).forEach((s, k) => gate(ctx, s, { kind: 'ring', glow: cols2[k % 3] }));
   },
 };
 

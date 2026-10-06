@@ -19,67 +19,108 @@ export const CARS = [
     paint: /74d59a0|a7be1ef|5d8a605|ac35cdf/, rig: 'r35' },
   { id: 'z06', name: 'Z06 Carbon', file: 'cars/z06.glb', price: 4000, len: 4.5,
     stats: { speed: 5, accel: 5, handling: 3, drift: 3 }, phys: { vmax: 73, acc: 1.1, turn: 0.88, drift: 0.95 },
-    paint: /^CHASSIS$|^mat_9$|^mat_38$/, rig: 'z06', accent: /^RIMRING$/ },
+    paint: /^CHASSIS$|^mat_9$|^mat_38$/, rig: 'z06' },
 ];
 
-// Curated paint presets the player can pick from (and the AI draws from, with random patterns).
+// Paint presets. A paint never covers the car: it rotates the hue of the car's own textures
+// towards `hue` (decals, numbers and shading stay), and gives grey panels a light tint.
 export const PAINTS = [
-  { name: 'Stock', stock: true },
-  { name: 'Solar Flare', c1: 0xff4d1a, c2: 0xffd21f, pattern: 1 },
-  { name: 'Ocean Drive', c1: 0x1479ff, c2: 0x20e3ff, pattern: 4 },
-  { name: 'Toxic', c1: 0x7cff1a, c2: 0x151515, pattern: 2 },
-  { name: 'Bubblegum', c1: 0xff5fb8, c2: 0xffffff, pattern: 1 },
-  { name: 'Royal Purple', c1: 0x7a2cff, c2: 0xff3df2, pattern: 5 },
-  { name: 'Lemon Drop', c1: 0xffe11a, c2: 0x111111, pattern: 3 },
-  { name: 'Crimson', c1: 0xe0102a, c2: 0xffffff, pattern: 2 },
-  { name: 'Mint', c1: 0x1ff0b0, c2: 0x0b3d91, pattern: 6 },
-  { name: 'Sunset', c1: 0xff7a1a, c2: 0xff1f6e, pattern: 5 },
-  { name: 'Arctic', c1: 0xdff6ff, c2: 0x2a8cff, pattern: 4 },
-  { name: 'Midnight', c1: 0x1a1f5e, c2: 0x00e0ff, pattern: 1 },
-  { name: 'Lime Rush', c1: 0xc6ff00, c2: 0x7a00ff, pattern: 4 },
-  { name: 'Rose Gold', c1: 0xf0a08a, c2: 0x4a2030, pattern: 6, metal: 0.9 },
+  { name: 'Factory', stock: true },
+  { name: 'Racing Red', hue: 0.0 },
+  { name: 'Sunburst', hue: 0.07 },
+  { name: 'Solar Yellow', hue: 0.14 },
+  { name: 'Lime', hue: 0.24 },
+  { name: 'Emerald', hue: 0.38 },
+  { name: 'Teal', hue: 0.48 },
+  { name: 'Sky Blue', hue: 0.56 },
+  { name: 'Royal Blue', hue: 0.64 },
+  { name: 'Violet', hue: 0.75 },
+  { name: 'Magenta', hue: 0.85 },
+  { name: 'Rose', hue: 0.94 },
 ];
 
-const VIVID = [0xff3b30, 0xff9500, 0xffd60a, 0x34c759, 0x00c7be, 0x0a84ff, 0x5e5ce6, 0xbf5af2, 0xff375f, 0xff6b2c, 0x30d158, 0x64d2ff,
-  0xf5f5f5, 0x2b2b30, 0xff2d92, 0x9bff1f, 0x00f0ff, 0xb8860b, 0x8e2de2, 0xe84393];
-
-export function makeLivery(r, forcePaint) {
-  if (forcePaint) {
-    if (forcePaint.stock) return { stock: true, glow: new THREE.Color(0x66ccff), size: [1, 1, 1] };
-    return {
-      tint: new THREE.Color(forcePaint.c1), tint2: new THREE.Color(forcePaint.c2), pattern: forcePaint.pattern || 0, pw: 0.5,
-      metal: forcePaint.metal ?? 0.55, rough: 0.28, clear: 1, glow: new THREE.Color(forcePaint.c2).lerp(new THREE.Color(forcePaint.c1), 0.3),
-      size: [1, 1, 1],
-    };
-  }
-  const c1 = r.pick(VIVID); let c2 = r.pick(VIVID);
-  while (c2 === c1) c2 = r.pick(VIVID);
-  const matte = r() < 0.2;
+// opts: { hue: 0..1 target hue, sat, tint: grey-panel tint amount }
+export function makeLivery(r, paint) {
+  if (paint && paint.stock) return { stock: true, glow: new THREE.Color(0x66ccff), size: [1, 1, 1] };
+  if (paint) return { hue: paint.hue, sat: 1.1, tintAmt: 0.32, metal: null, glow: new THREE.Color().setHSL(paint.hue, 0.9, 0.55), size: [1, 1, 1] };
+  const hue = r();
   return {
-    tint: new THREE.Color(c1), tint2: new THREE.Color(c2), pattern: r.int(0, 6), pw: r.range(0.35, 0.7),
-    metal: matte ? 0.1 : r.range(0.3, 0.8), rough: matte ? 0.65 : r.range(0.2, 0.4), clear: matte ? 0 : 1,
-    glow: new THREE.Color(c2), size: [r.range(0.97, 1.04), r.range(0.96, 1.06), r.range(0.97, 1.03)],
+    hue, sat: r.range(0.85, 1.35), tintAmt: r.range(0.18, 0.42),
+    metal: r() < 0.25 ? 0.15 : null, rough: 0.55,
+    glow: new THREE.Color().setHSL(hue, 0.9, 0.55), size: [r.range(0.98, 1.03), r.range(0.98, 1.04), r.range(0.98, 1.02)],
   };
 }
 
-const VERT_DECL = 'attribute vec3 aCarPos;\nvarying vec3 vCarPos;\n';
-const FRAG_DECL = 'varying vec3 vCarPos;\nuniform vec3 uTint;\nuniform vec3 uTint2;\nuniform float uPattern;\nuniform float uPW;\nuniform float uStrength;\n';
+const FRAG_DECL = `uniform float uHue; uniform float uSat; uniform vec3 uTint; uniform float uTintAmt;
+vec3 rgb2hsv(vec3 c){ vec4 K=vec4(0.,-1./3.,2./3.,-1.); vec4 p=mix(vec4(c.bg,K.wz),vec4(c.gb,K.xy),step(c.b,c.g)); vec4 q=mix(vec4(p.xyw,c.r),vec4(c.r,p.yzx),step(p.x,c.r)); float d=q.x-min(q.w,q.y); float e=1.0e-10; return vec3(abs(q.z+(q.w-q.y)/(6.*d+e)), d/(q.x+e), q.x); }
+vec3 hsv2rgb(vec3 c){ vec4 K=vec4(1.,2./3.,1./3.,3.); vec3 p=abs(fract(c.xxx+K.xyz)*6.-K.www); return c.z*mix(K.xxx,clamp(p-K.xxx,0.,1.),c.y); }
+`;
 const FRAG_BODY = `
-  float lum = dot(diffuseColor.rgb, vec3(0.299, 0.587, 0.114));
-  float shade = 0.42 + 1.1 * pow(lum, 0.7);
-  vec3 p = vCarPos;
-  float pm = 0.0;
-  if (uPattern > 0.5 && uPattern < 1.5) pm = step(abs(abs(p.x) - 0.2), uPW * 0.3);
-  else if (uPattern < 2.5 && uPattern > 1.5) pm = step(abs(p.x), uPW * 0.55);
-  else if (uPattern < 3.5 && uPattern > 2.5) pm = step(p.y, 0.22 + uPW * 0.25);
-  else if (uPattern < 4.5 && uPattern > 3.5) pm = step(0.0, p.x * 0.9 + p.z * 0.8 - 0.15 + (uPW - 0.5));
-  else if (uPattern < 5.5 && uPattern > 4.5) pm = smoothstep(0.35, -0.75, p.z);
-  else if (uPattern > 5.5) pm = step(0.7, p.y);
-  vec3 painted = mix(uTint, uTint2, pm) * shade;
-  diffuseColor.rgb = mix(diffuseColor.rgb, painted, uStrength);
+  {
+    vec3 col = diffuseColor.rgb;
+    vec3 hsv = rgb2hsv(col);
+    float colourful = smoothstep(0.14, 0.38, hsv.y) * smoothstep(0.015, 0.06, hsv.z);
+    vec3 shifted = hsv2rgb(vec3(fract(hsv.x + uHue), clamp(hsv.y * uSat, 0.0, 1.0), hsv.z));
+    float lum = dot(col, vec3(0.2126, 0.7152, 0.0722));
+    vec3 tinted = uTint * (lum / max(dot(uTint, vec3(0.2126, 0.7152, 0.0722)), 0.05));
+    float mid = smoothstep(0.01, 0.08, lum) * (1.0 - smoothstep(0.55, 0.9, lum));
+    vec3 grey = mix(col, tinted, uTintAmt * mid);
+    diffuseColor.rgb = mix(grey, shifted, colourful);
+  }
 `;
 
-let glowTex, shadowTex, beamTex;
+// dominant hue of the paint textures, so a preset hue can be reached from any base colour
+function dominantHue(images) {
+  const c = document.createElement('canvas'); c.width = c.height = 48; const g = c.getContext('2d', { willReadFrequently: true });
+  const bins = new Float32Array(36); let total = 0;
+  for (const img of images) {
+    try { g.clearRect(0, 0, 48, 48); g.drawImage(img, 0, 0, 48, 48); } catch { continue; }
+    const d = g.getImageData(0, 0, 48, 48).data;
+    for (let i = 0; i < d.length; i += 4) {
+      const r = d[i] / 255, gg = d[i + 1] / 255, b = d[i + 2] / 255, mx = Math.max(r, gg, b), mn = Math.min(r, gg, b), sat = mx ? (mx - mn) / mx : 0;
+      if (sat < 0.3 || mx < 0.12) continue;
+      let h; if (mx === r) h = ((gg - b) / (mx - mn)) % 6; else if (mx === gg) h = (b - r) / (mx - mn) + 2; else h = (r - gg) / (mx - mn) + 4;
+      h = ((h / 6) + 1) % 1; bins[Math.floor(h * 36) % 36] += sat * mx; total += sat * mx;
+    }
+  }
+  if (total < 40) return null;
+  let best = 0; for (let i = 1; i < 36; i++) if (bins[i] > bins[best]) best = i;
+  return (best + 0.5) / 36;
+}
+
+let glowTex, shadowTex, beamTex, flameGeo;
+
+// a 1.8 m flame jet pointing backwards (-z); aL runs 0 at the nozzle to 1 at the tip
+function flameGeometry() {
+  if (flameGeo) return flameGeo;
+  const L = 1.8, g = new THREE.ConeGeometry(0.2, L, 18, 10, true);
+  g.translate(0, L / 2, 0);                 // wide end at the nozzle (y = 0), tip at y = L
+  const pos = g.attributes.position, a = new Float32Array(pos.count);
+  for (let i = 0; i < pos.count; i++) a[i] = pos.getY(i) / L;
+  g.rotateX(-Math.PI / 2);                  // tip now points backwards (-z)
+  g.setAttribute('aL', new THREE.BufferAttribute(a, 1));
+  return (flameGeo = g);
+}
+function flameMaterial() {
+  return new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
+    uniforms: { uTime: { value: 0 }, uPower: { value: 0 } },
+    vertexShader: `attribute float aL; varying float vL; varying vec2 vP;
+      void main(){ vL = aL; vP = position.xy; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+    fragmentShader: `uniform float uTime; uniform float uPower; varying float vL; varying vec2 vP;
+      float h(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+      float n(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.-2.*f); return mix(mix(h(i), h(i+vec2(1,0)), f.x), mix(h(i+vec2(0,1)), h(i+vec2(1,1)), f.x), f.y); }
+      void main(){
+        float a = atan(vP.y, vP.x);
+        float t = n(vec2(a * 2.0, vL * 7.0 - uTime * 26.0)) * 0.6 + n(vec2(a * 5.0 + 3.0, vL * 15.0 - uTime * 40.0)) * 0.4;
+        float reach = 0.55 + 0.45 * t;
+        float alpha = smoothstep(reach, reach * 0.25, vL) * smoothstep(0.0, 0.05, vL);
+        vec3 core = vec3(0.55, 0.75, 1.0) * 2.2, mid = vec3(1.0, 0.78, 0.3) * 1.9, outer = vec3(1.0, 0.32, 0.06) * 1.4;
+        vec3 col = mix(core, mid, smoothstep(0.02, 0.22, vL)); col = mix(col, outer, smoothstep(0.25, 0.75, vL));
+        gl_FragColor = vec4(col * (0.7 + 0.5 * t), alpha * uPower);
+      }`,
+  });
+}
 function radialTexture(inner, outer) {
   const c = document.createElement('canvas'); c.width = c.height = 128;
   const g = c.getContext('2d'); const gr = g.createRadialGradient(64, 64, 4, 64, 64, 62);
@@ -115,26 +156,15 @@ function prepareTemplate(def, model) {
   box = new THREE.Box3().setFromObject(wrap);
   const half = box.getSize(new THREE.Vector3()).multiplyScalar(0.5);
 
-  // per-vertex car-space coordinates (x,z in -1..1, y in 0..1) for shader livery patterns
-  const v = new THREE.Vector3();
+  const paintImages = new Set();
   model.traverse((o) => {
     if (!o.isMesh) return;
     o.frustumCulled = false;
     const mat = o.material;
-    if (def.paint.test(mat.name) && !mat.transparent) {
-      const pos = o.geometry.attributes.position;
-      if (!o.geometry.attributes.aCarPos) {
-        const arr = new Float32Array(pos.count * 3);
-        for (let i = 0; i < pos.count; i++) {
-          v.fromBufferAttribute(pos, i).applyMatrix4(o.matrixWorld);
-          arr[i * 3] = v.x / half.x; arr[i * 3 + 1] = (v.y - box.min.y) / (half.y * 2); arr[i * 3 + 2] = v.z / half.z;
-        }
-        o.geometry.setAttribute('aCarPos', new THREE.BufferAttribute(arr, 3));
-      }
-      o.userData.paint = true;
-    } else if (def.accent && def.accent.test(mat.name)) o.userData.accent = true;
+    if (def.paint.test(mat.name) && !mat.transparent) { o.userData.paint = true; if (mat.map?.image) paintImages.add(mat.map.image); }
   });
-  return { def, wrap, half, height: half.y * 2 };
+  const baseHue = dominantHue(paintImages);
+  return { def, wrap, half, height: half.y * 2, baseHue };
 }
 
 // Build a fresh, independently coloured car from a template.
@@ -152,20 +182,16 @@ export function buildCar(tpl, livery) {
     if (!o.isMesh) return;
     if (o.userData.paint && !livery.stock) {
       const m = o.material.clone();
-      m.color.set(0xffffff);
-      if (livery.metal != null) { m.metalness = livery.metal; m.roughness = livery.rough; }
-      if ('clearcoat' in m) m.clearcoat = livery.clear ?? 1;
-      const u = { uTint: { value: livery.tint }, uTint2: { value: livery.tint2 }, uPattern: { value: livery.pattern }, uPW: { value: livery.pw }, uStrength: { value: 1 } };
+      if (livery.metal != null) { m.metalness = livery.metal; m.roughness = livery.rough; if ('clearcoat' in m) m.clearcoat = 0.2; }
+      const shift = tpl.baseHue == null ? 0 : livery.hue - tpl.baseHue;
+      const u = { uHue: { value: ((shift % 1) + 1) % 1 }, uSat: { value: livery.sat }, uTint: { value: new THREE.Color().setHSL(livery.hue, 0.85, 0.5) }, uTintAmt: { value: livery.tintAmt } };
       uniformSets.push(u);
       m.onBeforeCompile = (sh) => {
         Object.assign(sh.uniforms, u);
-        sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\n' + VERT_DECL).replace('#include <begin_vertex>', '#include <begin_vertex>\n vCarPos = aCarPos;');
         sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\n' + FRAG_DECL).replace('#include <map_fragment>', '#include <map_fragment>\n' + FRAG_BODY);
       };
-      m.customProgramCacheKey = () => 'livery-v1';
+      m.customProgramCacheKey = () => 'paint-hue-v2';
       o.material = m;
-    } else if (o.userData.accent && !livery.stock) {
-      const m = o.material.clone(); m.color.copy(livery.tint2); o.material = m;
     }
   });
 
@@ -198,8 +224,22 @@ export function buildCar(tpl, livery) {
   }
   root.add(lights);
 
+  // exhaust flames (shown while boosting)
+  const flames = new THREE.Group(); flames.visible = false;
+  const fmat = flameMaterial();
+  for (const sx of [-1, 1]) {
+    const f = new THREE.Mesh(flameGeometry(), fmat);
+    f.position.set(sx * tpl.half.x * 0.32, tpl.height * 0.24, -tpl.half.z + 0.05); f.renderOrder = 8;
+    flames.add(f);
+  }
+  root.add(flames);
+
   return {
-    root, body, wheels, glow, shadow, tail, livery, uniformSets, def, beamMat,
+    root, body, wheels, glow, shadow, tail, livery, uniformSets, def, beamMat, flames, flameMat: fmat,
+    setFlame(power, t) {
+      flames.visible = power > 0.02; fmat.uniforms.uPower.value = power; fmat.uniforms.uTime.value = t;
+      for (const f of flames.children) f.scale.set(1, 1, 0.7 + power * (0.55 + Math.random() * 0.35));
+    },
     setBeam(k) { beamMat.opacity = k; },
     setSteer(s) { for (const w of wheels) if (w.steer) w.steer.rotation.y = -s * 0.45; },
     spin(dist) { for (const w of wheels) w.spin.rotation.x += dist / 0.34; },
