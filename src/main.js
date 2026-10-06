@@ -75,7 +75,8 @@ const ui = new UI(document.getElementById('ui'), {
   toggleMusic: () => { save.music = !save.music; audio.setMusic(save.music); persist(); },
   toggleSfx: () => { save.sfx = !save.sfx; audio.setSfx(save.sfx); persist(); },
 });
-addEventListener('touchstart', () => { if (!ui.isTouch) { ui.isTouch = true; document.body.classList.add('is-touch'); } }, { once: true, passive: true });
+// a touch on a device we took for a desktop: switch to the on-screen controls that fit its size
+addEventListener('touchstart', () => { if (ui.device === 'desktop') ui.setDevice(Math.min(screen.width, screen.height) < 600 ? 'phone' : 'tablet'); }, { once: true, passive: true });
 const toast = (t, c) => ui.toast(t, c);
 
 // cheap per-track facts for the menus (course generation only, no meshes)
@@ -171,14 +172,15 @@ function readInput(dt) {
     if (gp.buttons[6]?.value > 0.1) brake = gp.buttons[6].value; if (gp.buttons[1]?.pressed) brake = 1;
     if (gp.buttons[2]?.pressed || gp.buttons[5]?.pressed) drift = true;
   }
+  let analog = false;
   if (ui.isTouch) {
     const t = ui.touch;
+    if (t.steer != null) { target = t.steer; analog = true; }
     if (t.left) target -= 1; if (t.right) target += 1;
-    if (t.brake) { brake = 1; throttle = 0; } else if (throttle === 0 && !keys.size && !gp) throttle = 1;
-    if (t.drift) drift = true;
+    if (t.brake || t.brake2) { brake = 1; throttle = 0; } else if (throttle === 0 && !keys.size && !gp) throttle = 1;
   }
   target = clamp(target, -1, 1);
-  const rate = Math.abs(target) > Math.abs(steerState) ? 7 : 11;
+  const rate = analog ? 14 : Math.abs(target) > Math.abs(steerState) ? 7 : 11;
   steerState += clamp(target - steerState, -rate * dt, rate * dt);
   return { steer: steerState, throttle, brake, drift };
 }
@@ -195,7 +197,7 @@ async function createSession(levelIndex, isDemo, progress = () => {}) {
   const nAI = isDemo ? 6 : 5;
   for (let i = 0; i < nAI; i++) {
     const def = CARS[(i + Math.floor(R() * 4)) % 4], livery = makeLivery(R);
-    const skill = (65 * L.ai * (0.96 + R() * 0.08)) / def.phys.vmax;
+    const skill = (96 * L.ai * (0.96 + R() * 0.08)) / def.phys.vmax;
     setups.push({ id: 'ai' + i, name: names[i], def, skill, lane: R.range(-0.8, 0.8), livery, color: new THREE.Color().setHSL(livery.hue, 0.8, 0.55).getHex() });
   }
   if (!isDemo) {
@@ -264,9 +266,10 @@ async function startRace(levelIndex) {
   audio.ambience((Array.isArray(S.th.weather) ? S.th.weather : []).includes('rain') ? 'rain' : 'none');
   S.world.events.thunder = (dist) => setTimeout(() => audio.thunder(), Math.min(2500, dist * 3));
 }
-const controlsHint = () => (ui.isTouch
-  ? 'Hold <b>◀ ▶</b> to steer · hold <b>DRIFT</b> through tight bends · hit the <b>yellow pads</b> to boost'
-  : '<b>← →</b> steer · <b>↑</b> gas · <b>↓</b> brake · hold <b>SPACE</b> to drift · hit the <b>yellow pads</b> to boost');
+const controlsHint = () => (ui.device === 'phone'
+  ? '<b>Slide your finger</b> left and right to steer · second finger brakes · hit the <b>yellow pads</b> to boost'
+  : ui.isTouch ? 'Hold <b>◀ ▶</b> to steer · <b>BRAKE</b> for the tight bends · hit the <b>yellow pads</b> to boost'
+  : '<b>← →</b> steer · <b>↑</b> gas · <b>↓</b> brake · <b>SPACE</b> handbrake · hit the <b>yellow pads</b> to boost');
 function endRace() {
   if (!S) return;
   disposeSession(S); S = null;
@@ -293,12 +296,13 @@ function raceCallbacks(sess) {
       for (let i = 0; i < 8; i++) sess.fx.sparks.emit(c.x, c.y + 0.5, c.z, (Math.random() - 0.5) * 8, Math.random() * 5, (Math.random() - 0.5) * 8, 0.4, 0.2, 1, 0.8, 0.3, 1, 0, 0, 12);
     },
     onBump: (a, b, v) => { if (mine(a) || mine(b)) { sess.shake = Math.max(sess.shake, clamp(v / 14, 0.1, 0.45)); audio.bump(v); } },
-    onObstacle: (c) => {
+    onObstacle: (c, k, o) => {
+      if (o.kind === 'crate') for (let i = 0; i < 14; i++) sess.fx.dust.emit(o.x, o.y, o.z, (Math.random() - 0.5) * 10 + c.vx * 0.4, Math.random() * 6, (Math.random() - 0.5) * 10 + c.vz * 0.4, 0.9, 0.5, 0.62, 0.45, 0.26, 1, 0.4, 2, 12);
       for (let i = 0; i < 10; i++) sess.fx.smoke.emit(c.x, c.y + 0.6, c.z, (Math.random() - 0.5) * 8, Math.random() * 5, (Math.random() - 0.5) * 8, 0.7, 1.1, 0.85, 0.85, 0.85, 0.6, 3, 0, 10);
       if (mine(c)) { sess.shake = Math.max(sess.shake, 0.5); audio.bump(10); flash('hit'); toast('HIT!', 'r'); }
     },
-    onCoin: (c, i) => { audio.coin(); const k = sess.world.track.coins[i], p = sess.world.track.pointAt(k.s, k.d); for (let n = 0; n < 6; n++) sess.fx.sparks.emit(p.x, p.y + 1.2, p.z, (Math.random() - 0.5) * 4, Math.random() * 4, (Math.random() - 0.5) * 4, 0.5, 0.25, 1, 0.85, 0.2, 1, 0, 2, 4); },
-    onPad: (c) => { if (mine(c)) { audio.boost(); audio.pad(); flash('boost', 900); sess.shake = Math.max(sess.shake, 0.22); toast('BOOST', 'y'); } },
+    onPad: (c, stack) => { if (mine(c)) { audio.boost(); audio.pad(); flash('boost', 900); sess.shake = Math.max(sess.shake, 0.22 + stack * 0.08); toast(stack ? `BOOST ×${stack + 1}` : 'BOOST', 'y'); } },
+    onKnockout: () => { audio.overtake(); toast('KNOCKOUT · +40', 'y'); },
     onLand: (c, v) => {
       if (mine(c)) { sess.shake = Math.max(sess.shake, clamp(v / 25, 0.15, 0.55)); audio.land(); }
       for (let i = 0; i < 12; i++) sess.fx.dust.emit(c.x + (Math.random() - 0.5) * 2, c.y + 0.2, c.z + (Math.random() - 0.5) * 2, (Math.random() - 0.5) * 8, Math.random() * 3, (Math.random() - 0.5) * 8, 0.8, 1.4, 0.8, 0.8, 0.8, 0.6, 4, 3, 6);
@@ -341,7 +345,7 @@ function emitFx(sess, dt) {
           const hot = Math.random();
           fx.fire.emit(_wp.x, _wp.y, _wp.z, -fwd[0] * (8 + Math.random() * 6) + (Math.random() - 0.5) * 1.5, (Math.random() - 0.2) * 1.4, -fwd[1] * (8 + Math.random() * 6) + (Math.random() - 0.5) * 1.5, 0.18 + Math.random() * 0.14, 0.35 + v.flame * 0.35, 1, 0.45 + hot * 0.4, 0.1 + hot * 0.15, 0.9, -0.3, 1, 0);
         }
-        if (Math.random() < 0.5) fx.smoke.emit(_wp.x, _wp.y, _wp.z, -fwd[0] * 5, 0.8, -fwd[1] * 5, 0.9, 0.7, 0.35, 0.35, 0.38, 0.35, 2.6, 1, -0.5);
+        if (Math.random() < 0.12) fx.smoke.emit(_wp.x, _wp.y, _wp.z, c.vx * 0.6, 0.8, c.vz * 0.6, 0.5, 0.5, 0.35, 0.35, 0.38, 0.25, 1.4, 1, -0.5);
       }
     }
     const back = [[-hx, 0.25, -hz], [hx, 0.25, -hz]];
@@ -354,10 +358,10 @@ function emitFx(sess, dt) {
 // chase camera for the player
 function chaseCam(sess, dt, snap = false) {
   const { cam, world } = sess, c = sess.focus;
-  const sp01 = clamp(Math.abs(c.speed) / 72, 0, 1.2), boosting = c.boostT > 0;
+  const sp01 = clamp(Math.abs(c.speed) / 100, 0, 1.3), boosting = c.boostT > 0;
   const vh = Math.hypot(c.vx, c.vz) > 6 ? Math.atan2(c.vx, c.vz) : c.h;
   cam.h += wrapAngle(c.h + wrapAngle(vh - c.h) * 0.45 - cam.h) * (snap ? 1 : 1 - Math.exp(-5.5 * dt));
-  const dist = 6.6 + sp01 * 1.8 + (boosting ? 1.2 : 0), height = 2.5 + sp01 * 0.5;
+  const dist = 9.6 + sp01 * 2.6 + (boosting ? 1.6 : 0), height = 3.5 + sp01 * 0.7;
   const dx = Math.sin(cam.h), dz = Math.cos(cam.h);
   const ex = c.x - dx * dist, ez = c.z - dz * dist;
   const tq = world.track.query(ex, ez, cam.hint, cam.q); cam.hint = tq.i0;
@@ -367,9 +371,11 @@ function chaseCam(sess, dt, snap = false) {
   cam.pos.x = lerp(cam.pos.x, ex, k); cam.pos.z = lerp(cam.pos.z, ez, k); cam.pos.y = lerp(cam.pos.y, ey, snap ? 1 : 1 - Math.exp(-9 * dt));
   const sh = sess.shake;
   raceCam.position.set(cam.pos.x + (Math.random() - 0.5) * sh * 0.7, cam.pos.y + (Math.random() - 0.5) * sh * 0.5, cam.pos.z + (Math.random() - 0.5) * sh * 0.7);
-  const ahead = 5 + sp01 * 4;
-  raceCam.lookAt(c.x + (Math.sin(c.h) + dx) * ahead * 0.5, c.y + 1.3 + c.pitch * 3, c.z + (Math.cos(c.h) + dz) * ahead * 0.5);
-  setFov(sess, 60 + sp01 * 12 + (boosting ? 14 : 0), snap);
+  const ahead = 8 + sp01 * 8;
+  raceCam.lookAt(c.x + (Math.sin(c.h) + dx) * ahead * 0.5, c.y + 1.6 + c.pitch * 3, c.z + (Math.cos(c.h) + dz) * ahead * 0.5);
+  cam.roll = lerp(cam.roll || 0, c.airborne ? 0 : c.roll, snap ? 1 : 1 - Math.exp(-6 * dt));
+  raceCam.rotateZ(-cam.roll * 0.45);
+  setFov(sess, 62 + sp01 * 12 + (boosting ? 10 : 0), snap);
 }
 function setFov(sess, f, snap) {
   sess.cam.fov = lerp(sess.cam.fov, f, snap ? 1 : 0.08);
@@ -440,7 +446,7 @@ function raceFrame(dt) {
   syncVisuals(S, dt); emitFx(S, dt);
   S.shake = Math.max(0, S.shake - dt * 1.6);
   chaseCam(S, dt);
-  S.world.update(dt, S.t, raceCam, tmpV.set(p.x, p.y, p.z), race.time);
+  S.world.update(dt, S.t, raceCam, tmpV.set(p.x, p.y, p.z), race.time, race.obs);
   for (const k in S.fx) S.fx[k].update(dt, innerHeight * renderer.getPixelRatio() * 0.9);
 
   // race notices
@@ -453,8 +459,8 @@ function raceFrame(dt) {
   }
   const wrongWay = race.state === 'racing' && !p.finished && Math.cos(wrapAngle(p.h - p.q.head)) < -0.3 && Math.abs(p.speed) > 8;
   ui.updateHud({
-    pos: p.place, time: race.state === 'countdown' ? 0 : p.finished ? p.finishTime : race.time, coins: p.coins,
-    speed: Math.abs(p.speed) * 3.6, boost: clamp(p.boostT / (1.8 * p.boostMul), 0, 1), wrongWay,
+    pos: p.place, time: race.state === 'countdown' ? 0 : p.finished ? p.finishTime : race.time,
+    speed: Math.abs(p.speed) * 3.6, boost: clamp(p.boostT / (2.8 * p.boostMul), 0, 1), wrongWay,
     cars: race.cars.map((c) => ({ id: c.id, x: c.x, z: c.z, prog: c.prog, me: c.isPlayer, color: c.color })),
   });
   if (S.startHint && race.state === 'racing' && race.time > 7) { ui.setHint(''); S.startHint = false; }
@@ -465,7 +471,7 @@ function raceFrame(dt) {
   for (const c of race.cars) { if (c === p) continue; const d = Math.hypot(c.x - p.x, c.z - p.z); if (d < bd) { bd = d; best = c; } }
   if (best) { const rx = -Math.cos(p.h), rz = Math.sin(p.h); audio.rival(bd, ((best.x - p.x) * rx + (best.z - p.z) * rz) / Math.max(bd, 1), Math.abs(best.speed) / best.phys.vmax); }
   audio.skid(p.drifting ? 0.9 : Math.abs(p.slip) > 0.25 && p.speed > 18 && p.onRoad ? clamp(Math.abs(p.slip) * 2, 0, 0.9) : 0);
-  speedLines(clamp((Math.abs(p.speed) / p.phys.vmax - 0.62) * 2.2, 0, 1) + (p.boostT > 0 ? 0.5 : 0), S.t);
+  speedLines(clamp((Math.abs(p.speed) / 100 - 0.55) * 2, 0, 1) + (p.boostT > 0 ? 0.5 : 0), S.t);
   if (S.finishT > 0) { S.finishT += dt; if (S.finishT > 2.4 && !S.over) finishRace(); }
 }
 
@@ -487,11 +493,11 @@ function frame(now) {
     renderWorld(S);
   } else if (mode === 'results' && S) {
     S.t += dt; S.race.update(dt); syncVisuals(S, dt); chaseCam(S, dt);
-    S.world.update(dt, S.t, raceCam, tmpV.set(S.focus.x, S.focus.y, S.focus.z), S.race.time);
+    S.world.update(dt, S.t, raceCam, tmpV.set(S.focus.x, S.focus.y, S.focus.z), S.race.time, S.race.obs);
     renderWorld(S);
   } else if ((mode === 'home' || mode === 'tracks') && demo) {
     demo.t += dt; demo.race.update(dt); syncVisuals(demo, dt); emitFx(demo, dt); cinematicCam(demo, dt);
-    demo.world.update(dt, demo.t, raceCam, tmpV.set(demo.focus.x, demo.focus.y, demo.focus.z), demo.race.time);
+    demo.world.update(dt, demo.t, raceCam, tmpV.set(demo.focus.x, demo.focus.y, demo.focus.z), demo.race.time, demo.race.obs);
     for (const k in demo.fx) demo.fx[k].update(dt, innerHeight * renderer.getPixelRatio() * 0.9);
     renderWorld(demo);
   } else if (mode === 'garage') {
@@ -529,7 +535,7 @@ function devHooks() {
   const q = new URLSearchParams(location.search);
   DEV.auto = q.has('auto');
   window.__game = {
-    audio, get S() { return S; }, get demo() { return demo; },
+    audio, ui, get S() { return S; }, get demo() { return demo; },
     fastForward(sec) { const race = S.race, p = race.player; for (let t = 0; t < sec; t += 1 / 60) { const i = race._ai(p, 1 / 60); p.input = i; race.update(1 / 60, i); } syncVisuals(S, 0); chaseCam(S, 0.016, true); },
   };
   if (q.has('level')) startRace(clamp(+q.get('level'), 0, LEVELS.length - 1)); else openHome();

@@ -9,16 +9,16 @@ const BASE = import.meta.env.BASE_URL;
 // phys: vmax (m/s), acc (accel multiplier), turn (steering rate multiplier), drift (drift-charge speed)
 export const CARS = [
   { id: 'gr86', name: 'GR86 Drift', file: 'cars/gr86.glb', price: 0, len: 4.5,
-    stats: { speed: 3, accel: 3, handling: 5, drift: 5 }, phys: { vmax: 63, acc: 1.0, turn: 1.12, drift: 1.35 },
+    stats: { speed: 3, accel: 3, handling: 5, drift: 5 }, phys: { vmax: 92, acc: 1.0, turn: 1.12, drift: 1.35 },
     paint: /body_n|bonnet_n/, rig: 'wh' },
   { id: 'gt4', name: '718 GT4', file: 'cars/gt4.glb', price: 900, len: 5.7,
-    stats: { speed: 4, accel: 4, handling: 4, drift: 3 }, phys: { vmax: 67, acc: 1.12, turn: 1.0, drift: 1.0 },
+    stats: { speed: 4, accel: 4, handling: 4, drift: 3 }, phys: { vmax: 97, acc: 1.12, turn: 1.0, drift: 1.0 },
     paint: /^Material\.001$|^Material001$/, rig: 'bone' },
   { id: 'r35', name: 'R35 Silhouette', file: 'cars/r35.glb', price: 2200, len: 4.7,
-    stats: { speed: 4, accel: 3, handling: 3, drift: 4 }, phys: { vmax: 70, acc: 1.0, turn: 0.92, drift: 1.15 },
+    stats: { speed: 4, accel: 3, handling: 3, drift: 4 }, phys: { vmax: 101, acc: 1.0, turn: 0.92, drift: 1.15 },
     paint: /74d59a0|a7be1ef|5d8a605|ac35cdf/, rig: 'r35' },
   { id: 'z06', name: 'Z06 Carbon', file: 'cars/z06.glb', price: 4000, len: 4.5,
-    stats: { speed: 5, accel: 5, handling: 3, drift: 3 }, phys: { vmax: 73, acc: 1.1, turn: 0.88, drift: 0.95 },
+    stats: { speed: 5, accel: 5, handling: 3, drift: 3 }, phys: { vmax: 106, acc: 1.1, turn: 0.88, drift: 0.95 },
     paint: /^CHASSIS$|^mat_9$|^mat_38$/, rig: 'z06' },
 ];
 

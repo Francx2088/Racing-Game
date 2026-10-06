@@ -83,7 +83,7 @@ export function buildWorld(levelDef, renderer) {
   const bounds = track.bounds, cx = (bounds.minX + bounds.maxX) / 2, cz = (bounds.minZ + bounds.maxZ) / 2;
   const events = { thunder: null };
   const ctx = {
-    events, track, th, group, r, noise, wd: track.wallD, scene, sunDir, lightDir, hemi, sun, anim, cx, cz, bounds,
+    camPos: new THREE.Vector3(), events, track, th, group, r, noise, wd: track.wallD, scene, sunDir, lightDir, hemi, sun, anim, cx, cz, bounds,
     place(geo, mat, list, { cast = false } = {}) { const im = instances(geo, mat, list); im.castShadow = cast; group.add(im); return im; },
     // random points in the 3D volume around the track. cb(x,y,z) -> instance | null
     volume(o0, cb) {
@@ -108,7 +108,7 @@ export function buildWorld(levelDef, renderer) {
     },
     cumulus(list, opts) { const im = cloudPuffs(list, { fog: th.fog, ...opts }); scene.add(im); return im; },
     floor(y, color) { const m = new THREE.Mesh(new THREE.PlaneGeometry(16000, 16000), new THREE.MeshBasicMaterial({ color })); m.rotation.x = -Math.PI / 2; m.position.y = y; m.renderOrder = -6; scene.add(m); anim.push((dt, t, cam) => { m.position.x = cam.position.x; m.position.z = cam.position.z; }); return m; },
-    waterfall(x, y, z, w, h, ry) { const m = waterfall(w, h); m.position.set(x, y - h / 2, z); m.rotation.y = ry; group.add(m); anim.push((dt, t) => { m.material.uniforms.uTime.value = t; }); return m; },
+    waterfall(x, y, z, w, h, ry, color, add) { const m = waterfall(w, h, color, add); m.position.set(x, y - h / 2, z); m.rotation.y = ry; group.add(m); anim.push((dt, t) => { m.material.uniforms.uTime.value = t; }); return m; },
     aurora() {
       const tex = canvasTex(256, 64, (g, w, h) => { const gr = g.createLinearGradient(0, h, 0, 0); gr.addColorStop(0, 'rgba(60,255,160,0)'); gr.addColorStop(0.35, 'rgba(60,255,160,0.6)'); gr.addColorStop(0.75, 'rgba(150,90,255,0.35)'); gr.addColorStop(1, 'rgba(150,90,255,0)'); g.fillStyle = gr; g.fillRect(0, 0, w, h); });
       for (let k = 0; k < 4; k++) {
@@ -117,6 +117,21 @@ export function buildWorld(levelDef, renderer) {
         const p = m.geometry.attributes.position, base = Float32Array.from(p.array);
         anim.push((dt, t) => { for (let i = 0; i < p.count; i++) p.setY(i, base[i * 3 + 1] + Math.sin(base[i * 3] * 0.008 + t * 0.5 + k) * 36 * (base[i * 3 + 1] > 0 ? 1 : 0.2)); p.needsUpdate = true; });
       }
+    },
+    // Animated props: one instanced mesh, every instance re-posed each frame by step(item, t, pose, index).
+    movers(geo, mat, list, step, { cast = false } = {}) {
+      const im = new THREE.InstancedMesh(geo, mat, Math.max(1, list.length)); im.count = list.length; im.frustumCulled = false; im.castShadow = cast;
+      const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(0, 0, 0, 'YXZ'), p = new THREE.Vector3(), sv = new THREE.Vector3(), o = {}, col = new THREE.Color();
+      list.forEach((it, i) => { if (it.color != null) im.setColorAt(i, col.set(it.color)); });
+      const upd = (t) => {
+        for (let i = 0; i < list.length; i++) {
+          const it = list[i]; o.x = it.x; o.y = it.y; o.z = it.z; o.rx = 0; o.ry = it.ry ?? 0; o.rz = 0; o.s = it.s ?? 1; o.sx = o.sy = o.sz = 1;
+          step(it, t, o, i); e.set(o.rx, o.ry, o.rz); q.setFromEuler(e); p.set(o.x, o.y, o.z); sv.set(o.s * o.sx, o.s * o.sy, o.s * o.sz);
+          m4.compose(p, q, sv); im.setMatrixAt(i, m4);
+        }
+        im.instanceMatrix.needsUpdate = true;
+      };
+      upd(0); anim.push((dt, t) => upd(t)); scene.add(im); return im;
     },
     islandGeo: islandGeometry, peakGeo: peakGeometry,
   };
@@ -128,7 +143,8 @@ export function buildWorld(levelDef, renderer) {
 
   return {
     scene, track, th, tm, weather, levelDef, events, sun, hemi, exposure: th.exposure, heightAt: () => -1000,
-    update(dt, t, camera, focus, raceT = t) {
+    update(dt, t, camera, focus, raceT = t, obs = null) {
+      ctx.camPos.copy(camera.position);
       sky.position.copy(camera.position);
       if (sunSpr) sunSpr.position.copy(glareDir).multiplyScalar(2300).add(camera.position);
       if (stars) stars.position.copy(camera.position);
@@ -136,7 +152,7 @@ export function buildWorld(levelDef, renderer) {
       if (focus) { sun.target.position.copy(focus); sun.position.copy(focus).addScaledVector(shadowDir, 200); }
       for (const f of anim) f(dt, t, camera);
       for (const f of tm.anim) f(t);
-      tm.updatePickups(t, raceT);
+      tm.updatePickups(t, raceT, obs);
       for (const w of weather) w.update(dt, camera);
     },
     dispose() {

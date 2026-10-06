@@ -21,17 +21,31 @@ const TIPS = [
   'Every gap has a boost pad before it. Take it, or you will drop into the clouds.',
   'Fall off and you restart from the last checkpoint gate, so keep your speed up.',
   'Crosswind zones push you sideways: steer into the wind before you reach them.',
-  'Hold drift through tight hairpins to swing the back out and keep your speed.',
+  'Full lock at speed swings the tail out: lift off in the tight bends and power out.',
+  'Coins come from how you drive: podiums, overtakes, knockouts, pads and clean runs.',
+  'Shove a rival off an open edge for a knockout bonus. They can do the same to you.',
+  'Pads in a row stack: every pad you chain adds more boost.',
+  'Hammers swing high at the ends of their arc. Sweepers spin: time your gap.',
   'Rivals get faster on every track. Spend coins in the Garage on Engine and Turbo.',
-  'Some obstacles slide across the road on later tracks. Watch their rhythm.',
 ];
 const stars = (n) => [1, 2, 3].map((k) => `<i class="${n >= k ? '' : 'off'}"></i>`).join('');
 
+// phone: swipe steering · tablet: on-screen buttons · desktop: keyboard / gamepad. ?device= overrides.
+export function detectDevice() {
+  const q = new URLSearchParams(location.search).get('device');
+  if (['phone', 'tablet', 'desktop'].includes(q)) return q;
+  const touch = navigator.maxTouchPoints > 0 || 'ontouchstart' in window;
+  const coarse = matchMedia('(pointer: coarse)').matches, mouse = matchMedia('(any-pointer: fine)').matches && matchMedia('(any-hover: hover)').matches;
+  if (!touch || (!coarse && mouse)) return 'desktop';
+  const ua = navigator.userAgent;
+  if (/iPad|Tablet/i.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1) || (/Android/i.test(ua) && !/Mobile/i.test(ua))) return 'tablet';
+  return Math.min(screen.width, screen.height) < 600 ? 'phone' : 'tablet';
+}
+
 export class UI {
   constructor(root, h) {
-    this.root = root; this.h = h; this.touch = { left: false, right: false, drift: false, brake: false };
-    this.isTouch = matchMedia('(pointer: coarse)').matches;
-    if (this.isTouch) document.body.classList.add('is-touch');
+    this.root = root; this.h = h; this.touch = { left: false, right: false, brake: false, steer: null };
+    this.setDevice(detectDevice());
     root.innerHTML = `
       <div class="loader" id="boot"><div class="inner">
         <div class="brand"><span class="mark">TURBO <b>RACING</b></span><span class="sub">SKY CIRCUIT</span></div>
@@ -152,13 +166,18 @@ export class UI {
     const buy = $('#gr-buy', el); if (buy) buy.onclick = () => this.h.garageBuy();
   }
 
+  setDevice(d) {
+    this.device = d; this.isTouch = d !== 'desktop';
+    document.body.classList.toggle('is-touch', this.isTouch); document.body.classList.toggle('is-phone', d === 'phone');
+  }
+
   // ---------- HUD ----------
   _buildHud() {
     this.hud.innerHTML = `
+      <div class="swipe" id="swipe"></div>
       <div class="hud-pos"><div class="p"><span id="h-pos">6</span><sup id="h-suf">th</sup><small id="h-total">/6</small></div><div class="t" id="h-time">0:00.00</div></div>
       <div class="hud-progress"><div class="rail"></div><div class="fill" id="h-fill"></div><div id="h-marks"></div><div class="flag"></div></div>
       <div class="hud-right"><canvas id="h-map" width="160" height="160"></canvas><button class="icon" id="h-pause" aria-label="Pause">${SVG.pause}</button></div>
-      <div class="chip hud-coins"><i class="coin"></i><span id="h-coins">0</span></div>
       <div class="hud-msg" id="h-msg"></div>
       <div class="hud-toasts" id="h-toasts"></div>
       <div class="hud-wrong hidden" id="h-wrong">WRONG WAY</div>
@@ -166,9 +185,10 @@ export class UI {
       <div class="hud-speed"><div class="v" id="h-speed">0</div><div class="u">KM/H</div><div class="boost"><i id="h-boost"></i></div></div>
       <div class="touchui">
         <div class="steer" id="steer"><div class="zone l"><svg viewBox="0 0 24 24"><path d="M16 4L6 12l10 8z"/></svg></div><div class="zone r"><svg viewBox="0 0 24 24"><path d="M8 4l10 8-10 8z"/></svg></div></div>
-        <div class="tbtn drift" data-k="drift">DRIFT</div><div class="tbtn brake" data-k="brake">BRAKE</div>
+        <div class="swipe-ind"><span>◀</span><i id="swipe-knob"></i><span>▶</span></div>
+        <div class="tbtn brake" data-k="brake">BRAKE</div>
       </div>`;
-    this.el = { pos: $('#h-pos'), suf: $('#h-suf'), total: $('#h-total'), time: $('#h-time'), fill: $('#h-fill'), marks: $('#h-marks'), coins: $('#h-coins'), speed: $('#h-speed'), boost: $('#h-boost'), msg: $('#h-msg'), toasts: $('#h-toasts'), wrong: $('#h-wrong'), hint: $('#h-hint'), map: $('#h-map') };
+    this.el = { pos: $('#h-pos'), suf: $('#h-suf'), total: $('#h-total'), time: $('#h-time'), fill: $('#h-fill'), marks: $('#h-marks'), speed: $('#h-speed'), boost: $('#h-boost'), msg: $('#h-msg'), toasts: $('#h-toasts'), wrong: $('#h-wrong'), hint: $('#h-hint'), map: $('#h-map') };
     this.mapCtx = this.el.map.getContext('2d');
     $('#h-pause').onclick = () => this.h.pause();
     this.hud.querySelectorAll('[data-k]').forEach((n) => {
@@ -183,6 +203,19 @@ export class UI {
     steer.addEventListener('pointerdown', (e) => { e.preventDefault(); steer.setPointerCapture(e.pointerId); set(e); });
     steer.addEventListener('pointermove', (e) => { if (steer.hasPointerCapture(e.pointerId)) set(e); });
     steer.addEventListener('pointerup', clear); steer.addEventListener('pointercancel', clear); steer.addEventListener('lostpointercapture', clear);
+    // phone: put a finger anywhere and slide it left/right; the further you slide the harder you steer
+    const sw = $('#swipe'), knob = $('#swipe-knob'); let id = null, x0 = 0;
+    const range = () => Math.min(innerWidth * 0.16, 120);
+    const show = (v) => { knob.style.transform = `translateX(${(v * 46).toFixed(1)}px)`; knob.classList.toggle('on', v !== 0); };
+    sw.addEventListener('pointerdown', (e) => { e.preventDefault(); sw.setPointerCapture?.(e.pointerId); if (id != null) { this.touch.brake2 = true; return; } id = e.pointerId; x0 = e.clientX; this.touch.steer = 0; show(0); });
+    sw.addEventListener('pointermove', (e) => {
+      if (e.pointerId !== id) return;
+      const R = range(); let dx = e.clientX - x0;
+      if (Math.abs(dx) > R) { x0 = e.clientX - Math.sign(dx) * R; dx = Math.sign(dx) * R; }
+      this.touch.steer = dx / R; show(this.touch.steer);
+    });
+    const up = (e) => { if (e.pointerId === id) { id = null; this.touch.steer = null; show(0); } else this.touch.brake2 = false; };
+    addEventListener('pointerup', up); addEventListener('pointercancel', up); sw.addEventListener('lostpointercapture', up);
   }
 
   initHud(track, cars) {
@@ -210,7 +243,6 @@ export class UI {
     const e = this.el, L = this._last;
     if (L.pos !== s.pos) { e.pos.textContent = s.pos; e.suf.textContent = ordinal(s.pos).slice(String(s.pos).length); L.pos = s.pos; }
     e.time.textContent = fmtTime(s.time);
-    if (L.coins !== s.coins) { e.coins.textContent = s.coins; L.coins = s.coins; }
     const sp = Math.round(s.speed); if (L.speed !== sp) { e.speed.textContent = sp; L.speed = sp; }
     e.boost.style.width = Math.round(s.boost * 100) + '%';
     e.wrong.classList.toggle('hidden', !s.wrongWay);

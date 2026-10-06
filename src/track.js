@@ -68,8 +68,19 @@ export class Track {
     }
     this.bounds = { minX, maxX, minZ, maxZ };
 
-    this.startS = 90;                       // start line
-    this.finishS = this.length - 190;       // finish line; road continues as a run-off
+    this.startS = 120;                      // start line
+    this.finishS = this.length - 420;       // finish line; road continues as a run-off
+
+    // Barriers only where they matter: the outside of real curves, the start and the finish.
+    // Everywhere else the edge is open, so a car pushed wide falls into the sky.
+    const wl = new Uint8Array(N), wr = new Uint8Array(N), K0 = 1 / 240, pad = Math.round(45 / this.spacing);
+    for (let i = 0; i < N; i++) {
+      const k = this.kappa[i];
+      if (k > K0) for (let j = Math.max(0, i - pad); j <= Math.min(N - 1, i + pad); j++) wl[j] = 1;
+      if (k < -K0) for (let j = Math.max(0, i - pad); j <= Math.min(N - 1, i + pad); j++) wr[j] = 1;
+    }
+    for (let i = 0; i < N; i++) { const s = i * this.spacing; if (s < this.startS + 160 || s > this.finishS - 120) wl[i] = wr[i] = 1; }
+    this.wallL = wl; this.wallR = wr;
     this._buildContent();
   }
 
@@ -143,70 +154,76 @@ export class Track {
   }
 
   _buildContent() {
-    const def = this.def, r = rng(def.seed * 7 + 3), L = this.length;
-    const used = [[0, this.startS + 60], [this.finishS - 40, L]];
-    for (const g of this.gaps) used.push([g.s0 - 70, g.s1 + 50]);
-    const free = (s, len) => used.every(([a, b]) => s + len < a - 12 || s > b + 12);
-    const straightish = (s0, len, maxK) => { const a = this.idxAtS(s0), n = Math.ceil(len / this.spacing); for (let k = 0; k < n; k++) if (this.absKappa[Math.min(a + k, this.N - 1)] > maxK) return false; return true; };
-    const place = (len, maxK, tries = 120) => {
-      for (let t = 0; t < tries; t++) { const s = r.range(this.startS + 80, this.finishS - 60 - len); if (free(s, len) && straightish(s, len, maxK)) { used.push([s, s + len]); return s; } }
+    const def = this.def, r = rng(def.seed * 7 + 3), L = this.length, hw = def.hw;
+    const used = [[0, this.startS + 140], [this.finishS - 80, L]];
+    for (const g of this.gaps) used.push([g.s0 - 110, g.s1 + 70]);
+    for (const g of this.gaps) for (let s = g.s0; s < g.s1; s += this.spacing) { const i = this.idxAtS(s); this.wallL[i] = this.wallR[i] = 0; }
+    const free = (s, len) => used.every(([a, b]) => s + len < a - 15 || s > b + 15);
+    const place = (len, test = () => true, tries = 160) => {
+      for (let t = 0; t < tries; t++) { const s = r.range(this.startS + 120, this.finishS - 80 - len); if (free(s, len) && test(s)) { used.push([s, s + len]); return s; } }
       return null;
     };
-    const perKm = (n) => Math.round(n * L / 1000);
+    const perKm = (n) => Math.round(n * (this.finishS - this.startS) / 1000);
+    const gentle = (len) => (s) => { const a = this.idxAtS(s), n = Math.ceil(len / this.spacing); for (let k = 0; k < n; k++) if (this.absKappa[Math.min(a + k, this.N - 1)] > 1 / 260) return false; return true; };
 
-    // jump ramps: one at every gap, plus a few kickers on straights
-    this.ramps = this.gaps.map((g) => ({ s: g.s0 - 18, len: 18, h: 2.8, w: this.wallD, gap: true }));
-    for (let k = 0; k < (def.kickers ?? 1); k++) { const s = place(60, 0.004); if (s != null) this.ramps.push({ s, len: 16, h: def.gravity ? 4 : 2.4, w: def.hw * 0.62 }); }
+    // jump ramps at every gap + a few kickers
+    this.ramps = this.gaps.map((g) => ({ s: g.s0 - 22, len: 22, h: 3.2, w: this.wallD + 0.6, gap: true }));
+    for (let k = 0; k < (def.kickers ?? 1); k++) { const s = place(70, gentle(70)); if (s != null) this.ramps.push({ s, len: 18, h: def.gravity ? 4.5 : 2.8, w: hw * 0.55 }); }
 
-    // boost pads: the only way to boost
+    // boost pads, often in chains of 2-3 down the same lane
     this.pads = [];
-    for (let k = 0; k < perKm(def.pads ?? 2); k++) {
-      const s = place(12, 0.006); if (s == null) continue;
-      const w = Math.min(4.4, def.hw * 0.42), lane = r.pick([-0.55, 0, 0.55]);
-      this.pads.push({ s, len: 10, d: lane * (def.hw - w), w });
+    const padW = Math.min(4.8, hw * 0.38);
+    for (let k = 0; k < perKm(def.pads ?? 1.6); k++) {
+      const chain = r() < 0.55 ? r.int(2, 3) : 1, len = chain * 46;
+      const s = place(len, gentle(len)); if (s == null) continue;
+      const lane = r.pick([-0.5, 0, 0.5]) * (hw - padW);
+      for (let c = 0; c < chain; c++) this.pads.push({ s: s + c * 46, len: 12, d: lane, w: padW });
     }
-    // a pad right before each jump so the gap can always be cleared
-    for (const g of this.gaps) this.pads.push({ s: g.s0 - 70, len: 10, d: 0, w: Math.min(4.4, def.hw * 0.42) });
+    for (const g of this.gaps) this.pads.push({ s: g.s0 - 95, len: 12, d: 0, w: padW });
 
     // surface hazards + crosswinds
     this.zones = [];
     for (const hz of def.hazards) {
       for (let k = 0; k < hz.count; k++) {
-        const len = hz.type === 'wind' ? r.range(90, 160) : r.range(22, 38);
-        const s = place(len, hz.type === 'wind' ? 0.01 : 0.02, 80); if (s == null) continue;
-        if (hz.type === 'wind') { this.zones.push({ type: 'wind', s0: s, s1: s + len, d0: -this.wallD, d1: this.wallD, dir: r.sign(), force: hz.force ?? 9 }); continue; }
-        const half = r.range(0.45, 0.8) * def.hw, side = r.sign();
-        const d0 = r() < 0.4 ? -def.hw : (side > 0 ? def.hw - half * 1.2 : -def.hw);
+        const wind = hz.type === 'wind', len = wind ? r.range(150, 260) : r.range(30, 50);
+        const s = place(len + 120, gentle(len + 120), 120); if (s == null) continue;
+        if (wind) { this.zones.push({ type: 'wind', s0: s, s1: s + len, d0: -this.wallD - 2, d1: this.wallD + 2, dir: r.sign(), force: hz.force ?? 14 }); continue; }
+        // slippery patches get barriers on both sides, so they cost time rather than a fall
+        for (let q = s - 30; q < s + len + 110; q += this.spacing) { const i = this.idxAtS(q); this.wallL[i] = this.wallR[i] = 1; }
+        const half = r.range(0.4, 0.7) * hw, d0 = r() < 0.5 ? -hw : hw - half * 1.2;
         this.zones.push({ type: hz.type, s0: s, s1: s + len, d0, d1: d0 + half * 1.2 });
       }
     }
-
-    // coins (spent on upgrades)
     this.coins = [];
-    for (let k = 0; k < perKm(def.coins ?? 2.5); k++) {
-      const s = r.range(this.startS + 60, this.finishS - 80); if (!this.hasRoad(s) || !this.hasRoad(s + 50)) continue;
-      const lane = r.range(-0.6, 0.6) * def.hw, n = r.int(5, 8);
-      for (let c = 0; c < n; c++) this.coins.push({ s: s + c * 7, d: lane, taken: false });
-    }
 
-    // obstacles stay on the road; some slide side to side on later levels
+    // obstacles: crate stacks (they fly when hit), sliding blocks, swinging hammers, rotating sweepers
     this.obstacles = [];
-    const oc = def.obstacles;
-    for (let k = 0; k < perKm(oc.perKm); k++) {
-      const s = r.range(this.startS + 120, this.finishS - 60);
-      if (used.some(([a, b]) => s > a - 15 && s < b + 15)) continue;
-      const moving = r() < (oc.moving ?? 0);
-      this.obstacles.push({ s, d: r.range(-0.75, 0.75) * def.hw, kind: oc.kind, rot: r() * 6.28, amp: moving ? def.hw * r.range(0.35, 0.6) : 0, freq: r.range(0.5, 1.1), phase: r() * 6.28 });
+    const kinds = def.obstacles.kinds;
+    for (let k = 0; k < perKm(def.obstacles.perKm); k++) {
+      const kind = r.pick(kinds), s = place(kind === 'crates' ? 30 : 24, kind === 'sweeper' ? gentle(40) : () => true, 60);
+      if (s == null) continue;
+      if (kind === 'crates') {
+        const lane = r.range(-0.7, 0.7) * hw, n = r.int(3, 6);
+        for (let c = 0; c < n; c++) this.obstacles.push({ kind: 'crate', s: s + (c % 3) * 2.2 + r.range(-0.3, 0.3), d: lane + Math.floor(c / 3) * 2.2 - 1.1 + r.range(-0.3, 0.3), stack: c >= 3 ? 1 : 0 });
+      } else if (kind === 'slider') {
+        this.obstacles.push({ kind, s, d: 0, amp: hw * r.range(0.6, 0.8), freq: r.range(0.9, 1.6), phase: r() * 6.28 });
+      } else if (kind === 'hammer') {
+        this.obstacles.push({ kind, s, d: 0, amp: hw * 0.75, freq: r.range(1.1, 1.7), phase: r() * 6.28 });
+      } else if (kind === 'sweeper') {
+        this.obstacles.push({ kind, s, d: 0, len: hw * 0.92, freq: r.range(0.7, 1.2) * r.sign(), phase: r() * 6.28 });
+      }
     }
 
-    // checkpoints: respawn points when a car falls off
+    // checkpoints: respawn points when a car falls
     this.checkpoints = [this.startS];
-    for (let s = 700; s < this.finishS - 200; s += 700) if (this.hasRoad(s) && !this.gaps.some((g) => Math.abs(g.s0 - s) < 160)) this.checkpoints.push(s);
-    for (const g of this.gaps) this.checkpoints.push(g.s0 - 140);
+    for (let s = 900; s < this.finishS - 300; s += 900) if (this.hasRoad(s) && !this.gaps.some((g) => Math.abs(g.s0 - s) < 220)) this.checkpoints.push(s);
+    for (const g of this.gaps) this.checkpoints.push(g.s0 - 200);
     this.checkpoints.sort((a, b) => a - b);
   }
 
-  obstacleD(o, t) { return o.amp ? o.d + Math.sin(t * o.freq + o.phase) * o.amp * (o.d > 0 ? -1 : 1) : o.d; }
+  // lateral position of a sliding obstacle at race time t
+  obstacleD(o, t) { return o.amp ? Math.sin(t * o.freq + o.phase) * o.amp : o.d; }
+  wallAt(s, side) { const i = this.idxAtS(s); return side < 0 ? this.wallL[i] : this.wallR[i]; }
   zoneAt(s, d) { for (const z of this.zones) if (s >= z.s0 && s <= z.s1 && d >= z.d0 && d <= z.d1) return z; return null; }
   rampAt(s, d) { for (const q of this.ramps) if (s >= q.s && s <= q.s + q.len && Math.abs(d) <= q.w) return q.h * (s - q.s) / q.len; return 0; }
   lastCheckpoint(s) { let c = this.checkpoints[0]; for (const k of this.checkpoints) if (k <= s) c = k; return c; }

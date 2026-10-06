@@ -1,9 +1,10 @@
 // Visual meshes for a course: road deck, barriers, lamps, pylons, start/finish gantries, boost pads,
-// hazard zones, ramps, coins and obstacles.
+// hazard zones, ramps and the moving obstacles.
 import * as THREE from 'three';
 import { canvasTex, css, part, merge, cyl, cone, box, ico, sph, tor, oct, litMat, instances } from './kit.js';
 import { rng } from './util.js';
 import { asphaltMaps, concreteTexture } from './sky.js';
+import { HAMMER } from './race.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
 // A strip along the road between two lateral/vertical offsets ({d, dy}). With no s0/s1 it follows the
@@ -39,6 +40,19 @@ function stripSpan(track, a, b, { s0 = 0, s1 = null, vTile = 20, lift = 0 } = {}
   return g;
 }
 
+// Like strip(), but only where mask[i] is set (e.g. barriers on one side of the road).
+function maskedStrip(track, a, b, mask, opts = {}) {
+  const runs = []; let i0 = -1;
+  for (let i = 0; i <= track.N; i++) {
+    const on = i < track.N && mask[i] && track.hasRoad(i * track.spacing);
+    if (on && i0 < 0) i0 = i;
+    else if (!on && i0 >= 0) { if (i - i0 > 1) runs.push([i0, i - 1]); i0 = -1; }
+  }
+  if (!runs.length) return null;
+  const parts = runs.map(([x, y]) => stripSpan(track, a, b, { ...opts, s0: x * track.spacing, s1: y * track.spacing }));
+  return parts.length === 1 ? parts[0] : mergeGeometries(parts, false);
+}
+
 const kerbTexture = (a, b) => canvasTex(16, 64, (g) => { g.fillStyle = css(a); g.fillRect(0, 0, 16, 32); g.fillStyle = css(b); g.fillRect(0, 32, 16, 32); }, { repeat: true });
 
 const arrowTex = () => canvasTex(128, 256, (g, w, h) => {
@@ -70,7 +84,7 @@ function zoneTex(type) {
 export function buildTrackMeshes(track, th, group) {
   const R = th.road, hw = track.hw, wd = track.wallD, N = track.N;
   const out = { anim: [] };
-  const mk = (geo, mat, order = 0, { cast = false, receive = true } = {}) => { const m = new THREE.Mesh(geo, mat); m.renderOrder = order; m.frustumCulled = false; m.castShadow = cast; m.receiveShadow = receive; group.add(m); return m; };
+  const mk = (geo, mat, order = 0, { cast = false, receive = true } = {}) => { if (!geo) return null; const m = new THREE.Mesh(geo, mat); m.renderOrder = order; m.frustumCulled = false; m.castShadow = cast; m.receiveShadow = receive; group.add(m); return m; };
 
   // ---- road surface (procedural PBR asphalt) ----
   const maps = asphaltMaps({ base: css(R.base), line: css(R.line), center: R.center !== false, centerColor: R.centerColor != null ? css(R.centerColor) : null, edgeGlow: R.edgeGlow != null ? css(R.edgeGlow) : null, wet: !!R.wet, seed: track.def.seed });
@@ -101,32 +115,49 @@ export function buildTrackMeshes(track, th, group) {
   const bandTex = concreteTexture({ a: 0xc8c8c4, bandA: R.wallA, bandB: R.wallB, seed: 3 });
   const barMat = new THREE.MeshStandardMaterial({ map: bandTex, roughness: 0.85, metalness: 0, side: THREE.DoubleSide, envMapIntensity: 0.3 });
   const metalMat = new THREE.MeshStandardMaterial({ color: 0xc7ccd2, metalness: 0.9, roughness: 0.32, side: THREE.DoubleSide, envMapIntensity: 1.1 });
-  let barTop = 0.95;
+  const edgeMat = new THREE.MeshBasicMaterial({ color: R.edge ?? th.accent, side: THREE.DoubleSide });
+  const open = (m) => m.map((v) => (v ? 0 : 1));
   for (const sgn of [-1, 1]) {
+    const mask = sgn < 0 ? track.wallL : track.wallR;
+    const S = (a, b, o) => maskedStrip(track, a, b, mask, o);
     if (btype === 'rail') {
-      barTop = 0.9;
       const prof = [[0.05, 0.36], [0.02, 0.5], [0.07, 0.62], [0.02, 0.76], [0.05, 0.9]];
-      for (let i = 0; i < prof.length - 1; i++) mk(strip(track, { d: sgn * (wd + prof[i][0]), dy: prof[i][1] }, { d: sgn * (wd + prof[i + 1][0]), dy: prof[i + 1][1] }, { vTile: 8 }), metalMat, 0, { cast: true });
-      mk(strip(track, { d: sgn * (wd + 0.08), dy: 0.0 }, { d: sgn * (wd + 0.08), dy: -3 }, { vTile: 8 }), barMat, 0);
+      for (let i = 0; i < prof.length - 1; i++) mk(S({ d: sgn * (wd + prof[i][0]), dy: prof[i][1] }, { d: sgn * (wd + prof[i + 1][0]), dy: prof[i + 1][1] }, { vTile: 8 }), metalMat, 0, { cast: true });
     } else if (btype === 'glass') {
-      barTop = 1.3;
-      const gl = new THREE.MeshPhysicalMaterial({ color: 0xbfe6ff, roughness: 0.04, metalness: 0, transmission: 0, transparent: true, opacity: 0.22, side: THREE.DoubleSide, envMapIntensity: 1.5, depthWrite: false });
-      mk(strip(track, { d: sgn * (wd + 0.1), dy: 0.45 }, { d: sgn * (wd + 0.1), dy: 1.3 }, { vTile: 8 }), gl, 3, { receive: false });
-      for (const prof of [[[0, 0], [0.12, 0.3], [0.2, 0.45], [0.5, 0.45], [0.5, -3]]]) for (let i = 0; i < prof.length - 1; i++) mk(strip(track, { d: sgn * (wd + prof[i][0]), dy: prof[i][1] }, { d: sgn * (wd + prof[i + 1][0]), dy: prof[i + 1][1] }, { vTile: 16 }), barMat, 0, { cast: true });
-      mk(strip(track, { d: sgn * (wd + 0.1), dy: 1.3 }, { d: sgn * (wd + 0.1), dy: 1.35 }, { vTile: 8 }), metalMat, 0);
+      const gl = new THREE.MeshPhysicalMaterial({ color: 0xbfe6ff, roughness: 0.04, metalness: 0, transparent: true, opacity: 0.22, side: THREE.DoubleSide, envMapIntensity: 1.5, depthWrite: false });
+      mk(S({ d: sgn * (wd + 0.1), dy: 0.45 }, { d: sgn * (wd + 0.1), dy: 1.3 }, { vTile: 8 }), gl, 3, { receive: false });
+      const prof = [[0, 0], [0.12, 0.3], [0.2, 0.45], [0.5, 0.45], [0.5, -1.5]];
+      for (let i = 0; i < prof.length - 1; i++) mk(S({ d: sgn * (wd + prof[i][0]), dy: prof[i][1] }, { d: sgn * (wd + prof[i + 1][0]), dy: prof[i + 1][1] }, { vTile: 16 }), barMat, 0, { cast: true });
+      mk(S({ d: sgn * (wd + 0.1), dy: 1.3 }, { d: sgn * (wd + 0.1), dy: 1.35 }, { vTile: 8 }), metalMat, 0);
     } else {
-      const prof = [[0, 0], [0.13, 0.3], [0.22, 0.88], [0.5, 0.95], [0.5, -3]];
-      for (let i = 0; i < prof.length - 1; i++) mk(strip(track, { d: sgn * (wd + prof[i][0]), dy: prof[i][1] }, { d: sgn * (wd + prof[i + 1][0]), dy: prof[i + 1][1] }, { vTile: 16 }), barMat, 0, { cast: true });
+      const prof = [[0, 0], [0.13, 0.3], [0.22, 0.88], [0.5, 0.95], [0.5, -1.5]];
+      for (let i = 0; i < prof.length - 1; i++) mk(S({ d: sgn * (wd + prof[i][0]), dy: prof[i][1] }, { d: sgn * (wd + prof[i + 1][0]), dy: prof[i + 1][1] }, { vTile: 16 }), barMat, 0, { cast: true });
     }
-    if (R.wallGlow != null) {
-      const gm = new THREE.MeshBasicMaterial({ color: R.wallGlow, side: THREE.DoubleSide });
-      mk(strip(track, { d: sgn * (wd - 0.02), dy: 0.55 }, { d: sgn * (wd - 0.02), dy: 0.62 }, { vTile: 8 }), gm, 2, { receive: false });
-    }
+    if (R.wallGlow != null) mk(S({ d: sgn * (wd - 0.02), dy: 0.55 }, { d: sgn * (wd - 0.02), dy: 0.62 }, { vTile: 8 }), new THREE.MeshBasicMaterial({ color: R.wallGlow, side: THREE.DoubleSide }), 2, { receive: false });
+    // open edge: a glowing lip so the drop is readable at speed
+    const om = open(mask);
+    mk(maskedStrip(track, { d: sgn * (wd - 0.35), dy: 0.03 }, { d: sgn * (wd + 0.02), dy: 0.03 }, om, { vTile: 4 }), edgeMat, 4, { receive: false });
+    mk(maskedStrip(track, { d: sgn * (wd + 0.02), dy: 0.03 }, { d: sgn * (wd + 0.02), dy: -0.6 }, om, { vTile: 4 }), edgeMat, 4, { receive: false });
   }
   if (btype === 'rail') {
     const post = instances(new THREE.BoxGeometry(0.14, 1.0, 0.14), new THREE.MeshStandardMaterial({ color: 0x4a4e55, roughness: 0.7, metalness: 0.4 }),
-      (() => { const l = []; for (let s = 0; s < track.length; s += 4) for (const sg of [-1, 1]) { if (!track.hasRoad(s)) continue; const p = track.pointAt(s, sg * (wd + 0.25)); l.push({ x: p.x, y: p.y + 0.35, z: p.z, ry: p.head }); } return l; })());
+      (() => { const l = []; for (let s = 0; s < track.length; s += 4) for (const sg of [-1, 1]) { if (!track.hasRoad(s) || !track.wallAt(s, sg)) continue; const p = track.pointAt(s, sg * (wd + 0.25)); l.push({ x: p.x, y: p.y + 0.35, z: p.z, ry: p.head }); } return l; })());
     post.castShadow = true; group.add(post);
+  }
+  // chevron boards on the outside of the sharp bends
+  {
+    const chev = canvasTex(128, 128, (g, w, h) => { g.fillStyle = '#12141c'; g.fillRect(0, 0, w, h); g.fillStyle = css(th.accent); g.beginPath(); g.moveTo(30, 14); g.lineTo(82, 64); g.lineTo(30, 114); g.lineTo(52, 114); g.lineTo(104, 64); g.lineTo(52, 14); g.closePath(); g.fill(); });
+    const list = { [-1]: [], [1]: [] };
+    for (let i = 0; i < N; i += 7) {
+      const k = track.kappa[i]; if (Math.abs(k) < 1 / 150) continue;
+      const side = k > 0 ? -1 : 1, s = i * track.spacing; if (!track.hasRoad(s) || !track.wallAt(s, side)) continue;
+      const p = track.pointAt(s, side * (wd + 0.6));
+      list[side].push({ x: p.x, y: p.y + 2.1, z: p.z, ry: p.head + (side > 0 ? -Math.PI / 2 : Math.PI / 2) });
+    }
+    const pg = new THREE.PlaneGeometry(2.4, 2.4);
+    for (const side of [-1, 1]) { const m = new THREE.MeshBasicMaterial({ map: chev, side: THREE.DoubleSide }); if (side < 0) { m.map = chev.clone(); m.map.repeat.x = -1; m.map.offset.x = 1; m.map.needsUpdate = true; } group.add(instances(pg, m, list[side])); }
+    const legs = [...list[-1], ...list[1]].map((o) => ({ ...o, y: o.y - 1.6 }));
+    group.add(instances(new THREE.BoxGeometry(0.15, 1.6, 0.15), new THREE.MeshStandardMaterial({ color: 0x30343c, metalness: 0.6, roughness: 0.5 }), legs));
   }
 
   // ---- lamp posts (speed cues + night lighting) ----
@@ -228,49 +259,91 @@ export function buildTrackMeshes(track, th, group) {
     mk(bf, rampMat, 2);
   }
 
-  // coins
-  const coinGeo = merge([part(cyl(0.7, 0.7, 0.14, 14), 0xffc61a, { r: [Math.PI / 2, 0, 0] }), part(cyl(0.45, 0.45, 0.18, 14), 0xfff0a0, { r: [Math.PI / 2, 0, 0] })]);
-  const coinsIM = instances(coinGeo, new THREE.MeshStandardMaterial({ vertexColors: true, metalness: 0.9, roughness: 0.25, emissive: 0x6a4a00, emissiveIntensity: 0.6 }), track.coins.map(() => ({ x: 0, y: 0, z: 0 })));
-  group.add(coinsIM);
-  const cp = track.coins.map((c) => track.pointAt(c.s, c.d));
-  const m4 = new THREE.Matrix4(), qq = new THREE.Quaternion(), ee = new THREE.Euler(), v3 = new THREE.Vector3(), sc = new THREE.Vector3(1, 1, 1), tmp = {};
-  // obstacles stay on the road; sliding ones move with the race clock
-  const og = obstacleGeo(track.def.obstacles.kind, th);
-  const obsIM = instances(og.geo, og.mat, track.obstacles.map(() => ({ x: 0, y: 0, z: 0 })));
-  obsIM.castShadow = true; group.add(obsIM);
-  out.obstacleRadius = og.radius;
-  out.updatePickups = (t, raceT = t) => {
-    track.coins.forEach((c, i) => {
-      const p = cp[i]; ee.set(0, t * 2.5 + i * 0.4, 0); qq.setFromEuler(ee);
-      v3.set(p.x, p.y + 1.15 + Math.sin(t * 3 + i) * 0.12, p.z); sc.setScalar(c.taken ? 0.0001 : 1);
-      m4.compose(v3, qq, sc); coinsIM.setMatrixAt(i, m4);
-    });
-    coinsIM.instanceMatrix.needsUpdate = true;
-    track.obstacles.forEach((o, i) => {
-      track.pointAt(o.s, track.obstacleD(o, raceT), tmp); ee.set(0, o.rot + (o.amp ? raceT * 0.8 : 0), 0); qq.setFromEuler(ee);
-      m4.compose(v3.set(tmp.x, tmp.y, tmp.z), qq, sc.setScalar(1)); obsIM.setMatrixAt(i, m4);
-    });
-    obsIM.instanceMatrix.needsUpdate = true;
+  // obstacles: crates are free bodies (race.obs), the rest are machines that move on the race clock
+  const m4 = new THREE.Matrix4(), qq = new THREE.Quaternion(), ee = new THREE.Euler(0, 0, 0, 'YXZ'), v3 = new THREE.Vector3(), sc = new THREE.Vector3(1, 1, 1), tmp = {};
+  const byKind = (k) => track.obstacles.map((o, i) => [o, i]).filter(([o]) => o.kind === k);
+  const kinds = {};
+  for (const k of ['crate', 'slider', 'hammer', 'sweeper']) {
+    const list = byKind(k); if (!list.length) continue;
+    const og = obstacleGeo(k, th);
+    const im = instances(og.geo, og.mat, list.map(() => ({ x: 0, y: 0, z: 0 }))); im.castShadow = true; im.frustumCulled = false; group.add(im);
+    kinds[k] = { list, im };
+    // static frames for the moving machines
+    if (k === 'hammer' || k === 'sweeper') {
+      const fg = frameGeo(k, wd);
+      const fl = list.map(([o]) => { const p = track.pointAt(o.s, 0); return { x: p.x, y: p.y, z: p.z, ry: p.head }; });
+      const fm = instances(fg, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.45, metalness: 0.7 }), fl); fm.castShadow = true; group.add(fm);
+    }
+  }
+  out.updatePickups = (t, raceT = t, obs = null) => {
+    for (const k in kinds) {
+      const { list, im } = kinds[k];
+      list.forEach(([o0, idx], j) => {
+        const o = obs ? obs[idx] : o0;
+        if (k === 'crate') {
+          if (obs) { v3.set(o.x, o.y, o.z); ee.set(o.rx, o.ry, o.rz); sc.setScalar(o.gone ? 0.0001 : 1); }
+          else { const p = track.pointAt(o.s, o.d, tmp); v3.set(p.x, p.y + 0.8 + (o.stack ? 1.6 : 0), p.z); ee.set(0, o.s, 0); sc.setScalar(1); }
+        } else if (k === 'slider') {
+          const p = track.pointAt(o.s, track.obstacleD(o, raceT), tmp); v3.set(p.x, p.y, p.z); ee.set(0, p.head, 0); sc.setScalar(1);
+        } else if (k === 'hammer') {
+          const d = track.obstacleD(o, raceT), p = track.pointAt(o.s, 0, tmp); v3.set(p.x, p.y + HAMMER.pivot, p.z);
+          ee.set(0, p.head, -Math.asin(Math.max(-1, Math.min(1, d / HAMMER.arm)))); sc.setScalar(1);
+        } else {
+          const p = track.pointAt(o.s, 0, tmp); v3.set(p.x, p.y, p.z); ee.set(0, p.head + raceT * o.freq + o.phase, 0); sc.set(o.len / 13.5, 1, 1);
+        }
+        qq.setFromEuler(ee); m4.compose(v3, qq, sc); im.setMatrixAt(j, m4);
+      });
+      im.instanceMatrix.needsUpdate = true;
+    }
   };
+  out.updatePickups(0, 0);
   return out;
 }
 
+// Static gantry over a hammer / hub under a sweeper.
+function frameGeo(kind, wd) {
+  if (kind === 'hammer') {
+    const H = HAMMER.pivot;
+    return merge([
+      part(box(1.2, H + 1, 1.2), 0x2b2f38, { p: [-(wd + 0.8), (H + 1) / 2, 0] }), part(box(1.2, H + 1, 1.2), 0x2b2f38, { p: [wd + 0.8, (H + 1) / 2, 0] }),
+      part(box(wd * 2 + 2.8, 1.4, 1.6), 0x2b2f38, { p: [0, H + 0.6, 0] }), part(box(wd * 2 + 2.9, 0.3, 1.7), 0xffc414, { p: [0, H - 0.2, 0] }),
+      part(cyl(0.9, 0.9, 2.2, 14), 0x8a909a, { p: [0, H, 0], r: [Math.PI / 2, 0, 0] }),
+    ]);
+  }
+  return merge([part(cyl(1.25, 1.6, 0.5, 18), 0x2b2f38, { p: [0, 0.25, 0] }), part(cyl(0.85, 0.95, 2.6, 14), 0x8a909a, { p: [0, 1.3, 0] }), part(cyl(0.95, 0.95, 0.25, 14), 0xffc414, { p: [0, 2.0, 0] })]);
+}
+
+const crateTex = () => canvasTex(128, 128, (g, w, h) => {
+  g.fillStyle = '#a8743c'; g.fillRect(0, 0, w, h);
+  for (let y = 0; y < 5; y++) { g.fillStyle = y % 2 ? '#9a6a34' : '#b07c42'; g.fillRect(10, 10 + y * 22, w - 20, 20); g.fillStyle = 'rgba(0,0,0,0.25)'; g.fillRect(10, 29 + y * 22, w - 20, 2); }
+  g.fillStyle = '#6b4520'; g.fillRect(0, 0, w, 10); g.fillRect(0, h - 10, w, 10); g.fillRect(0, 0, 10, h); g.fillRect(w - 10, 0, 10, h);
+  g.save(); g.translate(w / 2, h / 2); g.rotate(Math.atan2(h, w)); g.fillRect(-w * 0.7, -6, w * 1.4, 12); g.restore();
+  g.fillStyle = 'rgba(20,10,0,0.55)'; g.font = '900 20px "Arial Black", Impact, sans-serif'; g.textAlign = 'center'; g.fillText('FRAGILE', w / 2, h / 2 - 14);
+});
+
 function obstacleGeo(kind, th) {
-  const lit = litMat();
-  const K = {
-    cone: () => ({ g: merge([part(cone(0.55, 1.5, 8), 0xff6a13, { p: [0, 0.85, 0] }), part(cyl(0.58, 0.58, 0.12, 8), 0xffffff, { p: [0, 0.55, 0], s: [0.9, 1, 0.9] }), part(box(1.2, 0.12, 1.2), 0x222222, { p: [0, 0.06, 0] })]), r: 0.9 }),
-    barrel: () => ({ g: merge([part(cyl(0.7, 0.7, 1.4, 10), 0xc8321c, { p: [0, 0.7, 0] }), part(cyl(0.72, 0.72, 0.18, 10), 0xeeeeee, { p: [0, 0.7, 0] }), part(cyl(0.72, 0.72, 0.1, 10), 0x333333, { p: [0, 1.38, 0] })]), r: 1.0 }),
-    bollard: () => ({ g: merge([part(cyl(0.4, 0.5, 1.6, 8), 0x2a2d3a, { p: [0, 0.8, 0] }), part(cyl(0.42, 0.42, 0.25, 8), 0xff2bd6, { p: [0, 1.5, 0] }), part(cyl(0.52, 0.52, 0.2, 8), 0x00f0ff, { p: [0, 0.3, 0] })]), r: 0.9, basic: true }),
-    iceblock: () => ({ g: merge([part(box(2.0, 1.6, 2.0), 0xa6e3ff, { p: [0, 0.8, 0], r: [0, 0.4, 0] }), part(box(1.2, 2.3, 1.2), 0xd6f4ff, { p: [0.3, 1.1, 0.2], r: [0, 0.9, 0] })]), r: 1.5 }),
-    log: () => ({ g: merge([part(cyl(0.6, 0.6, 3.6, 8), 0x7a4a24, { p: [0, 0.6, 0], r: [0, 0, Math.PI / 2] }), part(cyl(0.45, 0.45, 3.7, 8), 0x9a6a3c, { p: [0, 0.6, 0], r: [0, 0, Math.PI / 2] })]), r: 1.6 }),
-    rock: () => ({ g: merge([part(ico(1.3, 0), 0x3b3340, { p: [0, 0.9, 0], s: [1.2, 0.9, 1] }), part(ico(0.8, 0), 0xff5a1f, { p: [0.7, 0.4, 0.4], s: 0.6 })]), r: 1.3 }),
-    gumdrop: () => ({ g: merge([part(sph(1.1, 10, 7), 0xff4fa3, { p: [0, 0.6, 0], s: [1, 0.85, 1] }), part(cyl(1.15, 1.15, 0.3, 10), 0xffffff, { p: [0, 0.15, 0] })]), r: 1.15 }),
-    moonrock: () => ({ g: merge([part(ico(1.2, 0), 0x8d8d99, { p: [0, 0.7, 0], s: [1.2, 0.8, 1] }), part(ico(0.6, 0), 0xb4b4c0, { p: [0.8, 0.35, 0.5] })]), r: 1.3 }),
-    haybale: () => ({ g: merge([part(cyl(0.9, 0.9, 1.5, 12), 0xe0b43c, { p: [0, 0.9, 0], r: [0, 0, Math.PI / 2] }), part(cyl(0.93, 0.93, 0.12, 12), 0xb88a22, { p: [0, 0.9, 0], r: [0, 0, Math.PI / 2] })]), r: 1.2 }),
-    crate: () => ({ g: merge([part(box(1.6, 1.6, 1.6), 0x9a6a3a, { p: [0, 0.8, 0], r: [0, 0.4, 0] }), part(box(1.7, 0.18, 1.7), 0x6e4a26, { p: [0, 0.2, 0], r: [0, 0.4, 0] }), part(box(1.7, 0.18, 1.7), 0x6e4a26, { p: [0, 1.4, 0], r: [0, 0.4, 0] })]), r: 1.3 }),
-    debris: () => ({ g: merge([part(box(1.8, 0.5, 1.2), 0xb8bcc8, { p: [0, 0.6, 0], r: [0.3, 0.5, 0.2] }), part(ico(0.8, 0), 0x7a7a86, { p: [0.6, 0.5, 0.4] })]), r: 1.3 }),
-    star: () => ({ g: merge([part(oct(1.3), 0xffe94d, { p: [0, 1.4, 0], s: [1, 1.2, 1] }), part(oct(0.8), 0xff8a1f, { p: [0, 1.4, 0], r: [0.6, 0.6, 0], s: 1 })]), r: 1.2, basic: true }),
-  };
-  const o = K[kind]();
-  return { geo: o.g, mat: o.basic ? new THREE.MeshBasicMaterial({ vertexColors: true }) : lit, radius: o.r };
+  if (kind === 'crate') {
+    const g = new THREE.BoxGeometry(1.6, 1.6, 1.6);
+    return { geo: g, mat: new THREE.MeshStandardMaterial({ map: crateTex(), roughness: 0.85, metalness: 0 }) };
+  }
+  const acc = th.accent, mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.4, metalness: 0.6, emissive: 0x000000 });
+  if (kind === 'slider') {
+    return { geo: merge([
+      part(box(4.6, 2.2, 2.2), 0x262a33, { p: [0, 1.2, 0] }), part(box(4.7, 0.5, 2.3), 0xffc414, { p: [0, 1.6, 0] }), part(box(4.7, 0.5, 2.3), 0x111318, { p: [0, 0.6, 0] }),
+      part(box(4.8, 0.14, 2.4), acc, { p: [0, 2.35, 0] }), part(box(4.2, 0.2, 1.8), 0x15171c, { p: [0, 0.1, 0] }),
+    ]), mat };
+  }
+  if (kind === 'hammer') {
+    const L = HAMMER.arm;
+    return { geo: merge([
+      part(box(0.7, L - 1.5, 0.7), 0x8a909a, { p: [0, -(L - 1.5) / 2, 0] }),
+      part(cyl(1.7, 1.7, 3.6, 16), 0x262a33, { p: [0, -L, 0], r: [Math.PI / 2, 0, 0] }), part(cyl(1.75, 1.75, 0.6, 16), 0xffc414, { p: [0, -L, 0], r: [Math.PI / 2, 0, 0] }),
+      part(cyl(1.2, 1.2, 3.8, 16), acc, { p: [0, -L, 0], r: [Math.PI / 2, 0, 0], s: [1, 1, 1] }),
+    ]), mat };
+  }
+  // sweeper: a long arm on a spinning hub
+  return { geo: merge([
+    part(box(2 * 13.5, 0.9, 1.0), 0x262a33, { p: [0, 1.15, 0] }), part(box(2 * 13.5, 0.22, 1.05), 0xffc414, { p: [0, 1.15, 0] }),
+    part(box(2 * 13.5 + 0.4, 0.12, 1.1), acc, { p: [0, 1.65, 0] }), part(cyl(1.1, 1.1, 1.2, 16), 0x3a3f4a, { p: [0, 1.2, 0] }),
+  ]), mat };
 }

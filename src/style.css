@@ -183,12 +183,18 @@ body.is-touch .touchui { display: block; }
 .touchui .zone svg { width: 40%; height: 40%; fill: #fff; }
 .touchui .zone.active { background: rgba(255, 214, 10, 0.4); }
 .tbtn { position: absolute; pointer-events: auto; border-radius: 50%; display: grid; place-items: center; font-weight: 700; letter-spacing: 0.08em; font-size: 13px; border: 2px solid rgba(255, 255, 255, 0.35); width: var(--btn); height: var(--btn); }
-.tbtn.drift { right: calc(14px + var(--safe-r)); bottom: calc(14px + var(--safe-b)); background: rgba(95, 208, 255, 0.35); }
-.tbtn.brake { right: calc(var(--btn) + 26px + var(--safe-r)); bottom: calc(14px + var(--safe-b)); background: rgba(255, 90, 90, 0.35); }
+.tbtn.brake { right: calc(14px + var(--safe-r)); bottom: calc(14px + var(--safe-b)); background: rgba(255, 90, 90, 0.35); }
+.swipe { position: absolute; inset: 0; display: none; pointer-events: auto; }
+.swipe-ind { position: absolute; left: 50%; bottom: calc(16px + var(--safe-b)); transform: translateX(-50%); width: 150px; height: 34px; border-radius: 17px; background: rgba(8, 14, 34, 0.35); border: 1px solid rgba(255, 255, 255, 0.2); display: none; align-items: center; justify-content: space-between; padding: 0 10px; color: rgba(255, 255, 255, 0.5); font-size: 11px; }
+.swipe-ind i { position: absolute; left: 50%; top: 50%; width: 22px; height: 22px; margin: -11px 0 0 -11px; border-radius: 50%; background: rgba(255, 255, 255, 0.55); transition: background 0.15s; }
+.swipe-ind i.on { background: #ffd60a; }
+body.is-phone .swipe, body.is-phone .swipe-ind { display: block; }
+body.is-phone .swipe-ind { display: flex; }
+body.is-phone .touchui .steer { display: none; }
+body.is-phone .tbtn.brake { --btn: 64px; font-size: 11px; }
 .tbtn.on { filter: brightness(1.6); transform: scale(0.94); }
 body.is-touch .hud-speed { left: auto; right: calc(var(--gutter) + var(--safe-r)); transform: none; bottom: calc(clamp(58px, min(17vh, 17vw), 96px) + 34px + var(--safe-b)); text-align: right; }
 body.is-touch .hud-speed .boost { margin-right: 0; }
-body.is-touch .hud-coins { left: auto; right: calc(var(--gutter) + var(--safe-r)); bottom: auto; top: calc(min(clamp(90px, 20vh, 160px), 28vw) + 70px + var(--safe-t)); }
 @media (max-width: 620px) { .hud-progress { top: calc(78px + var(--safe-t)); width: 60vw; } .hint { top: calc(110px + var(--safe-t)); } }
 
 /* ---------- overlays ---------- */

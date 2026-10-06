@@ -155,14 +155,14 @@ export function peakGeometry(seed, { rock = [0x57514d, 0x7c726a], snowLine = 0.5
 }
 
 // falling water sheet
-export function waterfall(w, h) {
+export function waterfall(w, h, color = 0xdbefff, add = false) {
   const mat = new THREE.ShaderMaterial({
-    transparent: true, depthWrite: false, side: THREE.DoubleSide, uniforms: { uTime: { value: 0 } },
+    transparent: true, depthWrite: false, side: THREE.DoubleSide, blending: add ? THREE.AdditiveBlending : THREE.NormalBlending, uniforms: { uTime: { value: 0 }, uCol: { value: new THREE.Color(color) } },
     vertexShader: 'varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.); }',
-    fragmentShader: `varying vec2 vUv; uniform float uTime; ${GLSL_NOISE}
+    fragmentShader: `varying vec2 vUv; uniform float uTime; uniform vec3 uCol; ${GLSL_NOISE}
       void main(){ float s = vnoise(vec2(vUv.x*14., vUv.y*3. + uTime*2.2)) * 0.6 + vnoise(vec2(vUv.x*30.+3., vUv.y*8. + uTime*3.4))*0.4;
         float edge = smoothstep(0.0,0.15,vUv.x)*smoothstep(1.0,0.85,vUv.x); float fade = smoothstep(0.0,0.25,vUv.y)*smoothstep(1.0,0.45,vUv.y) ;
-        gl_FragColor = vec4(vec3(0.86,0.94,1.0), s*edge*fade*0.75);
+        gl_FragColor = vec4(uCol, s*edge*fade*0.75);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
       }`,

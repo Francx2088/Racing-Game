@@ -46,14 +46,21 @@ export function carSetup(def) {
 // 0..1 ratings for the garage bars (normalised against the fastest possible car)
 export function ratings(def) {
   const { phys, boostMul } = carSetup(def);
-  return { speed: phys.vmax / 92, accel: phys.acc / 1.55, handling: phys.turn * phys.grip / 1.55, boost: boostMul / 1.75 };
+  return { speed: (phys.vmax - 60) / 70, accel: phys.acc / 1.55, handling: phys.turn * phys.grip / 1.55, boost: boostMul / 1.75 };
 }
 
+// Coins are earned from how the race was driven, not picked up on the road.
 export function raceRewards(race, levelIndex) {
-  const p = race.player, place = p.place;
-  const bonus = Math.round(([0, 320, 220, 160, 110, 80, 60][place] || 60) * (1 + levelIndex * 0.18));
-  const rows = [[`Finished ${place}${['th', 'st', 'nd', 'rd'][place < 4 ? place : 0]}`, bonus], [`Coins picked up (${race.stats.coins})`, race.stats.coins * 5], [`Overtakes (${race.stats.overtakes})`, Math.min(race.stats.overtakes, 15) * 5]];
-  if (race.stats.falls === 0) rows.push(['No falls', 60]);
+  const p = race.player, place = p.place, st = race.stats, k = 1 + levelIndex * 0.18;
+  const bonus = Math.round(([0, 320, 220, 160, 110, 80, 60][place] || 60) * k);
+  const kmh = Math.round(st.maxSpeed * 3.6);
+  const rows = [[`Finished ${place}${['th', 'st', 'nd', 'rd'][place < 4 ? place : 0]}`, bonus]];
+  if (st.overtakes) rows.push([`Overtakes (${st.overtakes})`, Math.min(st.overtakes, 20) * 8]);
+  if (st.knockouts) rows.push([`Knockouts (${st.knockouts})`, st.knockouts * 40]);
+  if (st.boosts) rows.push([`Boost pads (${st.boosts})`, st.boosts * 4]);
+  if (kmh > 300) rows.push([`Top speed ${kmh} km/h`, Math.round((kmh - 300) / 2)]);
+  if (st.falls === 0) rows.push(['No falls', 60]);
+  if (st.hits === 0) rows.push(['No obstacle hits', 40]);
   const total = rows.reduce((a, r) => a + r[1], 0);
   return { rows, total, stars: place === 1 ? 3 : place === 2 ? 2 : place === 3 ? 1 : 0 };
 }

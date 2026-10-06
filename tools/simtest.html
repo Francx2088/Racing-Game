@@ -7,12 +7,12 @@ const only = new URLSearchParams(location.search).get('l');
 for (let li = 0; li < LEVELS.length; li++) {
   if (only != null && +only !== li) continue;
   const L = LEVELS[li]; const world = buildWorld(L); const R = rng(5);
-  const setups = []; for (let i = 0; i < 6; i++) setups.push({ id: i === 5 ? 'me' : 'ai' + i, name: 'c' + i, def: CARS[i % 4], isPlayer: i === 5, skill: (65 * L.ai * (0.96 + R() * 0.08)) / CARS[i % 4].phys.vmax, lane: R.range(-0.8, 0.8), livery: makeLivery(R) });
-  const ev = { wall: 0, bump: 0, obst: 0, respawn: 0, fell: 0, pad: 0, land: 0 };
-  const race = new Race(world, setups, { onWall: () => ev.wall++, onBump: () => ev.bump++, onObstacle: () => ev.obst++, onRespawn: (c, f) => { ev.respawn++; if (f) ev.fell++; }, onPad: () => ev.pad++, onLand: () => ev.land++ });
+  const setups = []; for (let i = 0; i < 6; i++) setups.push({ id: i === 5 ? 'me' : 'ai' + i, name: 'c' + i, def: CARS[i % 4], isPlayer: i === 5, skill: (96 * L.ai * (0.96 + R() * 0.08)) / CARS[i % 4].phys.vmax, lane: R.range(-0.8, 0.8), livery: makeLivery(R) });
+  const falls = []; const ev = { wall: 0, bump: 0, obst: 0, respawn: 0, fell: 0, pad: 0, land: 0, ko: 0 };
+  const race = new Race(world, setups, { onWall: () => ev.wall++, onBump: () => ev.bump++, onObstacle: () => ev.obst++, onRespawn: (c, f) => { ev.respawn++; if (f) { ev.fell++; const g = world.track.gaps.find((g) => c.maxS > g.s0 - 300 && c.maxS < g.s1 + 30); falls.push(Math.round(c.maxS) + (g ? 'J' + Math.round(g.s1 - g.s0) : 'E' + (world.track.absKappa[world.track.idxAtS(c.maxS)] * 1000).toFixed(1))); } }, onPad: () => ev.pad++, onLand: () => ev.land++, onKnockout: () => ev.ko++ });
   const p = race.player; let t = 0, maxSp = 0;
   while (t < 400 && race.state !== 'done') { const inp = race._ai(p, 1 / 60); race.update(1 / 60, inp); t += 1 / 60; maxSp = Math.max(maxSp, p.speed); }
-  out.push(`${L.name.padEnd(20)} ${(world.track.length/1000).toFixed(1)}km  ${race.order.map(c => c.name + (c.finished ? '@' + c.finishTime.toFixed(0) : '?')).join(' ')} | max ${(maxSp*3.6).toFixed(0)}kmh ${JSON.stringify(ev)}`);
+  out.push(`${L.name.padEnd(20)} ${(world.track.length/1000).toFixed(1)}km  ${race.order.map(c => c.name + (c.finished ? '@' + c.finishTime.toFixed(0) : '?')).join(' ')} | max ${(maxSp*3.6).toFixed(0)}kmh ${JSON.stringify(ev)}\n   falls: ${[...new Set(falls)].slice(0, 14).join(' ')}`);
   world.dispose();
 }
 document.getElementById('o').textContent = out.join('\n'); window.OUT = out.join('\n');
