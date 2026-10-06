@@ -9,17 +9,17 @@ const BASE = import.meta.env.BASE_URL;
 // phys: vmax (m/s), acc (accel multiplier), turn (steering rate multiplier), drift (drift-charge speed)
 export const CARS = [
   { id: 'gr86', name: 'GR86 Drift', file: 'cars/gr86.glb', price: 0, len: 4.5,
-    stats: { speed: 3, accel: 3, handling: 5, drift: 5 }, phys: { vmax: 92, acc: 1.0, turn: 1.12, drift: 1.35 },
-    paint: /body_n|bonnet_n/, rig: 'wh' },
+    stats: { speed: 3, accel: 3, handling: 5, drift: 5 }, phys: { vmax: 110, acc: 1.0, turn: 1.12, drift: 1.35 },
+    paint: /body_n|bonnet_n|punch_n/, rig: 'wh' },
   { id: 'gt4', name: '718 GT4', file: 'cars/gt4.glb', price: 900, len: 5.7,
-    stats: { speed: 4, accel: 4, handling: 4, drift: 3 }, phys: { vmax: 97, acc: 1.12, turn: 1.0, drift: 1.0 },
-    paint: /^Material\.001$|^Material001$/, rig: 'bone' },
+    stats: { speed: 4, accel: 4, handling: 4, drift: 3 }, phys: { vmax: 116, acc: 1.12, turn: 1.0, drift: 1.0 },
+    paint: /^Material\.001$|^Material001$|^Material\.010$/, rig: 'bone' },
   { id: 'r35', name: 'R35 Silhouette', file: 'cars/r35.glb', price: 2200, len: 4.7,
-    stats: { speed: 4, accel: 3, handling: 3, drift: 4 }, phys: { vmax: 101, acc: 1.0, turn: 0.92, drift: 1.15 },
-    paint: /74d59a0|a7be1ef|5d8a605|ac35cdf/, rig: 'r35' },
+    stats: { speed: 4, accel: 3, handling: 3, drift: 4 }, phys: { vmax: 121, acc: 1.0, turn: 0.92, drift: 1.15 },
+    paint: /8f6757c|5b73dff|74d59a0|309098f|a7be1ef|5d8a605|ac35cdf|bc1dc97|^decal$/, rig: 'r35' },
   { id: 'z06', name: 'Z06 Carbon', file: 'cars/z06.glb', price: 4000, len: 4.5,
-    stats: { speed: 5, accel: 5, handling: 3, drift: 3 }, phys: { vmax: 106, acc: 1.1, turn: 0.88, drift: 0.95 },
-    paint: /^CHASSIS$|^mat_9$|^mat_38$/, rig: 'z06' },
+    stats: { speed: 5, accel: 5, handling: 3, drift: 3 }, phys: { vmax: 127, acc: 1.1, turn: 0.88, drift: 0.95 },
+    paint: /^CHASSIS$|^mat_9$|^mat_38$|^mat_13$|^mat_15$|^mat_16$|^mat_17$/, rig: 'z06' },
 ];
 
 // Paint presets. A paint never covers the car: it rotates the hue of the car's own textures
@@ -42,10 +42,10 @@ export const PAINTS = [
 // opts: { hue: 0..1 target hue, sat, tint: grey-panel tint amount }
 export function makeLivery(r, paint) {
   if (paint && paint.stock) return { stock: true, glow: new THREE.Color(0x66ccff), size: [1, 1, 1] };
-  if (paint) return { hue: paint.hue, sat: 1.1, tintAmt: 0.32, metal: null, glow: new THREE.Color().setHSL(paint.hue, 0.9, 0.55), size: [1, 1, 1] };
+  if (paint) return { hue: paint.hue, sat: 1.15, tintAmt: 0.96, metal: null, glow: new THREE.Color().setHSL(paint.hue, 0.9, 0.55), size: [1, 1, 1] };
   const hue = r();
   return {
-    hue, sat: r.range(0.85, 1.35), tintAmt: r.range(0.18, 0.42),
+    hue, sat: r.range(0.95, 1.35), tintAmt: r.range(0.82, 0.97),
     metal: r() < 0.25 ? 0.15 : null, rough: 0.55,
     glow: new THREE.Color().setHSL(hue, 0.9, 0.55), size: [r.range(0.98, 1.03), r.range(0.98, 1.04), r.range(0.98, 1.02)],
   };
@@ -59,12 +59,14 @@ const FRAG_BODY = `
   {
     vec3 col = diffuseColor.rgb;
     vec3 hsv = rgb2hsv(col);
-    float colourful = smoothstep(0.14, 0.38, hsv.y) * smoothstep(0.015, 0.06, hsv.z);
+    float colourful = smoothstep(0.5, 0.75, hsv.y) * smoothstep(0.015, 0.06, hsv.z);
     vec3 shifted = hsv2rgb(vec3(fract(hsv.x + uHue), clamp(hsv.y * uSat, 0.0, 1.0), hsv.z));
     float lum = dot(col, vec3(0.2126, 0.7152, 0.0722));
-    vec3 tinted = uTint * (lum / max(dot(uTint, vec3(0.2126, 0.7152, 0.0722)), 0.05));
-    float mid = smoothstep(0.01, 0.08, lum) * (1.0 - smoothstep(0.55, 0.9, lum));
-    vec3 grey = mix(col, tinted, uTintAmt * mid);
+    // white / grey panels take the paint colour, keeping their shading; black trim stays black
+    float th = rgb2hsv(uTint).x;
+    vec3 tinted = hsv2rgb(vec3(th, 1.0 - 0.08 * smoothstep(0.9, 1.0, lum), clamp(0.1 + lum * 0.5, 0.0, 1.0)));
+    float paintable = smoothstep(0.004, 0.035, lum);
+    vec3 grey = mix(col, tinted, uTintAmt * paintable);
     diffuseColor.rgb = mix(grey, shifted, colourful);
   }
 `;
@@ -161,7 +163,8 @@ function prepareTemplate(def, model) {
     if (!o.isMesh) return;
     o.frustumCulled = false;
     const mat = o.material;
-    if (def.paint.test(mat.name) && !mat.transparent) { o.userData.paint = true; if (mat.map?.image) paintImages.add(mat.map.image); }
+    // decal and livery overlays are painted too (they carry most of the white); lights never are
+    if (def.paint.test(mat.name) && !/light|glow|glass/i.test(o.name)) { o.userData.paint = true; if (mat.map?.image && !mat.transparent) paintImages.add(mat.map.image); }
   });
   const baseHue = dominantHue(paintImages);
   return { def, wrap, half, height: half.y * 2, baseHue };
@@ -182,7 +185,11 @@ export function buildCar(tpl, livery) {
     if (!o.isMesh) return;
     if (o.userData.paint && !livery.stock) {
       const m = o.material.clone();
-      if (livery.metal != null) { m.metalness = livery.metal; m.roughness = livery.rough; if ('clearcoat' in m) m.clearcoat = 0.2; }
+      if (livery.metal != null) { m.metalness = livery.metal; m.roughness = livery.rough; }
+      // tame the studio-white gloss so the paint colour reads, keep a light clear coat
+      m.metalness = Math.min(m.metalness, 0.3); m.roughness = Math.max(m.roughness, 0.38); m.envMapIntensity = 0.75;
+      if ('clearcoat' in m) { m.clearcoat = Math.min(m.clearcoat, 0.3); m.clearcoatRoughness = Math.max(m.clearcoatRoughness, 0.15); }
+      if ('specularIntensity' in m) m.specularIntensity = Math.min(m.specularIntensity, 0.5);
       const shift = tpl.baseHue == null ? 0 : livery.hue - tpl.baseHue;
       const u = { uHue: { value: ((shift % 1) + 1) % 1 }, uSat: { value: livery.sat }, uTint: { value: new THREE.Color().setHSL(livery.hue, 0.85, 0.5) }, uTintAmt: { value: livery.tintAmt } };
       uniformSets.push(u);
@@ -190,7 +197,7 @@ export function buildCar(tpl, livery) {
         Object.assign(sh.uniforms, u);
         sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\n' + FRAG_DECL).replace('#include <map_fragment>', '#include <map_fragment>\n' + FRAG_BODY);
       };
-      m.customProgramCacheKey = () => 'paint-hue-v2';
+      m.customProgramCacheKey = () => 'paint-hue-v9';
       o.material = m;
     }
   });

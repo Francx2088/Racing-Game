@@ -175,7 +175,7 @@ function crystals(ctx, { count, colors, minD = 40, maxD = 420, size = [3, 9], gl
 // Meteors streaking across the far sky.
 function meteors(ctx, { count, color = 0xffa040 }) {
   const { r } = ctx, list = [];
-  for (let k = 0; k < count; k++) list.push({ x: 0, y: 0, z: 0, a: r() * 6.28, ph: r() * 10, T: 5 + r() * 6 });
+  for (let k = 0; k < count; k++) list.push({ x: 0, y: 0, z: 0, always: true, a: r() * 6.28, ph: r() * 10, T: 5 + r() * 6 });
   const geo = merge([part(box(1.4, 1.4, 60), color, { p: [0, 0, 30] }), part(ico(2.2, 1), 0xffffff, {})]);
   ctx.movers(geo, new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }), list, (it, t, o) => {
     const u = ((t + it.ph) % it.T) / it.T, cam = ctx.camPos;

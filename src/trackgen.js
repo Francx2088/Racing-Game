@@ -66,22 +66,23 @@ export function generateCourse(opts) {
     }
 
     const side = r() < 0.5 ? -1 : 1, kind = r();
+    // banked sweepers and S-chains, never hairpins
     let piece, dys = null;
     if (bowlsLeft > 0 && kind < 0.1) {                 // tight, heavily banked bowl
-      piece = arc(side * Math.PI * (0.75 + r() * 0.2), 120 + (1 - tw) * 40); bowlsLeft--;
-    } else if (kind < 0.18) {                          // short blast
-      piece = straight(160 + r() * 220 * (1.2 - tw));
+      piece = arc(side * Math.PI * (0.55 + r() * 0.15), 210 + (1 - tw) * 60); bowlsLeft--;
+    } else if (kind < 0.26) {                          // fast straight
+      piece = straight(240 + r() * 300 * (1.2 - tw));
     } else if (kind < 0.46) {                          // big banked sweeper
-      piece = arc(side * (0.7 + r() * 1.0) * (0.75 + tw * 0.5), 170 + (1 - tw) * 150 + r() * 60);
+      piece = arc(side * (0.45 + r() * 0.75) * (0.75 + tw * 0.5), 300 + (1 - tw) * 200 + r() * 140);
     } else if (kind < 0.74) {                          // S-chain
-      const n = 2 + Math.floor(r() * (2 + tw * 2)), a = (0.5 + r() * 0.45) * (0.8 + tw * 0.4), R = 140 + (1 - tw) * 90;
+      const n = 2 + Math.floor(r() * (1 + tw * 1.5)), a = (0.32 + r() * 0.3) * (0.8 + tw * 0.4), R = 260 + (1 - tw) * 140;
       piece = []; for (let k = 0; k < n; k++) piece.push(...arc((k % 2 ? -side : side) * a, R));
     } else if (kind < 0.87) {                          // dive or climb through a curve
       const up = r() < 0.4 ? 1 : -1, a = side * (0.5 + r() * 0.6);
-      piece = arc(a, 200 + r() * 80); const total = up * (35 + r() * 40);
+      piece = arc(a * 0.8, 320 + r() * 120); const total = up * (35 + r() * 40);
       dys = piece.map(() => total / piece.length); yTarget = y + total;
     } else {                                           // corkscrew: S-chain while dropping
-      const a = 0.55 * (0.8 + tw * 0.4), R = 150;
+      const a = 0.4 * (0.8 + tw * 0.4), R = 260;
       piece = [...arc(side * a, R), ...arc(-side * a, R), ...arc(side * a, R)];
       const total = -(30 + r() * 30); dys = piece.map(() => total / piece.length); yTarget = y + total;
     }

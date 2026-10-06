@@ -23,10 +23,12 @@ audio.musicOn = save.music; audio.sfxOn = save.sfx; audio.enabled = save.music |
 
 // ------------------------------------------------------------------ renderer
 const canvas = document.getElementById('gl');
+// render resolution: phones and tablets have tiny pixels, so they render at a lower ratio
+const COARSE = matchMedia('(pointer: coarse)').matches;
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFShadowMap;
-let pixelRatio = Math.min(window.devicePixelRatio || 1, 1.75);
+renderer.shadowMap.enabled = !COARSE; renderer.shadowMap.type = THREE.PCFShadowMap;
+let pixelRatio = Math.min(window.devicePixelRatio || 1, COARSE ? 1.2 : 1.5);
 const MAXPR = pixelRatio;
 let composer = null, renderPass = null, bloom = null, fxOn = true;
 const raceCam = new THREE.PerspectiveCamera(62, 1, 0.3, 4000), garageCam = new THREE.PerspectiveCamera(36, 1, 0.1, 100);
@@ -40,7 +42,7 @@ addEventListener('resize', resize); resize();
 const studioEnv = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
 function initComposer() {
   if (composer) return;
-  const rt = new THREE.WebGLRenderTarget(innerWidth, innerHeight, { type: THREE.HalfFloatType, samples: 4 });
+  const rt = new THREE.WebGLRenderTarget(innerWidth, innerHeight, { type: THREE.HalfFloatType, samples: COARSE ? 0 : 4 });
   composer = new EffectComposer(renderer, rt); composer.setPixelRatio(pixelRatio); composer.setSize(innerWidth, innerHeight);
   renderPass = new RenderPass(new THREE.Scene(), raceCam); composer.addPass(renderPass);
   bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.25, 0.45, 8); composer.addPass(bloom);
@@ -48,7 +50,8 @@ function initComposer() {
 }
 function renderWorld(sess) {
   renderer.toneMappingExposure = sess.world.exposure ?? 0.5;
-  if (fxOn && composer) { renderPass.scene = sess.world.scene; renderPass.camera = raceCam; composer.render(); }
+  // bloom only pays off at night (neon, lamps, exhaust); day scenes render straight to the screen
+  if (fxOn && composer && sess.th.night) { renderPass.scene = sess.world.scene; renderPass.camera = raceCam; composer.render(); }
   else renderer.render(sess.world.scene, raceCam);
 }
 
@@ -133,7 +136,8 @@ const garage = (() => {
     },
   };
 })();
-const paintFor = (def) => save.paints[def.id] ?? 0;
+const DEFAULT_PAINT = { gr86: 8, gt4: 1, r35: 5, z06: 10 };
+const paintFor = (def) => save.paints[def.id] ?? DEFAULT_PAINT[def.id] ?? 1;
 const liveryFor = (def) => makeLivery(rng(1), PAINTS[paintFor(def)]);
 function refreshGarage(reloadCar) {
   const def = CARS[gIdx];
@@ -197,7 +201,7 @@ async function createSession(levelIndex, isDemo, progress = () => {}) {
   const nAI = isDemo ? 6 : 5;
   for (let i = 0; i < nAI; i++) {
     const def = CARS[(i + Math.floor(R() * 4)) % 4], livery = makeLivery(R);
-    const skill = (96 * L.ai * (0.96 + R() * 0.08)) / def.phys.vmax;
+    const skill = (114 * L.ai * (0.96 + R() * 0.08)) / def.phys.vmax;
     setups.push({ id: 'ai' + i, name: names[i], def, skill, lane: R.range(-0.8, 0.8), livery, color: new THREE.Color().setHSL(livery.hue, 0.8, 0.55).getHex() });
   }
   if (!isDemo) {
@@ -358,7 +362,7 @@ function emitFx(sess, dt) {
 // chase camera for the player
 function chaseCam(sess, dt, snap = false) {
   const { cam, world } = sess, c = sess.focus;
-  const sp01 = clamp(Math.abs(c.speed) / 100, 0, 1.3), boosting = c.boostT > 0;
+  const sp01 = clamp(Math.abs(c.speed) / 120, 0, 1.3), boosting = c.boostT > 0;
   const vh = Math.hypot(c.vx, c.vz) > 6 ? Math.atan2(c.vx, c.vz) : c.h;
   cam.h += wrapAngle(c.h + wrapAngle(vh - c.h) * 0.45 - cam.h) * (snap ? 1 : 1 - Math.exp(-5.5 * dt));
   const dist = 9.6 + sp01 * 2.6 + (boosting ? 1.6 : 0), height = 3.5 + sp01 * 0.7;
@@ -366,7 +370,8 @@ function chaseCam(sess, dt, snap = false) {
   const ex = c.x - dx * dist, ez = c.z - dz * dist;
   const tq = world.track.query(ex, ez, cam.hint, cam.q); cam.hint = tq.i0;
   let ey = c.y + height;
-  if (Math.abs(tq.d) < world.track.wallD + 3 && world.track.hasRoad(tq.s)) ey = Math.max(ey, tq.surfaceY + 1.3);
+  const dk = world.track.deckAt(tq.s, tq.d, cam.dk || (cam.dk = {}));
+  if (Math.abs(tq.d - dk.c) < dk.half + 3 && world.track.hasRoad(tq.s)) ey = Math.max(ey, tq.surfaceY + 1.3);
   const k = snap ? 1 : 1 - Math.exp(-14 * dt);
   cam.pos.x = lerp(cam.pos.x, ex, k); cam.pos.z = lerp(cam.pos.z, ez, k); cam.pos.y = lerp(cam.pos.y, ey, snap ? 1 : 1 - Math.exp(-9 * dt));
   const sh = sess.shake;
@@ -454,6 +459,8 @@ function raceFrame(dt) {
     while (S.cpIdx < T.checkpoints.length && p.maxS >= T.checkpoints[S.cpIdx]) { if (T.hasRoad(T.checkpoints[S.cpIdx])) toast('CHECKPOINT', 'w'); S.cpIdx++; }
     if (p.wind && !S.lastWind) toast('CROSSWIND', 'b');
     S.lastWind = p.wind;
+    const fk = T.splits.find((q) => q.s0 - p.q.s > 0 && q.s0 - p.q.s < 260);
+    if (fk && !S.gapWarned.has(fk.s0)) { S.gapWarned.add(fk.s0); toast('FORK AHEAD · INSIDE IS SHORTER', 'b'); }
     const g = T.gapAhead(p.q.s, 260);
     if (g && !S.gapWarned.has(g.s0)) { S.gapWarned.add(g.s0); toast('JUMP AHEAD · HIT THE PAD', 'y'); }
   }
@@ -471,7 +478,7 @@ function raceFrame(dt) {
   for (const c of race.cars) { if (c === p) continue; const d = Math.hypot(c.x - p.x, c.z - p.z); if (d < bd) { bd = d; best = c; } }
   if (best) { const rx = -Math.cos(p.h), rz = Math.sin(p.h); audio.rival(bd, ((best.x - p.x) * rx + (best.z - p.z) * rz) / Math.max(bd, 1), Math.abs(best.speed) / best.phys.vmax); }
   audio.skid(p.drifting ? 0.9 : Math.abs(p.slip) > 0.25 && p.speed > 18 && p.onRoad ? clamp(Math.abs(p.slip) * 2, 0, 0.9) : 0);
-  speedLines(clamp((Math.abs(p.speed) / 100 - 0.55) * 2, 0, 1) + (p.boostT > 0 ? 0.5 : 0), S.t);
+  speedLines(clamp((Math.abs(p.speed) / 120 - 0.55) * 2, 0, 1) + (p.boostT > 0 ? 0.5 : 0), S.t);
   if (S.finishT > 0) { S.finishT += dt; if (S.finishT > 2.4 && !S.over) finishRace(); }
 }
 
@@ -483,7 +490,7 @@ function frame(now) {
   fpsAcc += dt; fpsN++;
   if (fpsAcc > 1.5) {
     const avg = fpsAcc / fpsN; fpsAcc = 0; fpsN = 0;
-    if (avg > 1 / 38) slow++; else slow = 0;
+    if (avg > 1 / 45) slow++; else slow = 0;
     if (avg < 1 / 57) fast++; else fast = 0;
     if (slow >= 2 && pixelRatio > 0.7) { pixelRatio = Math.max(0.7, pixelRatio * 0.85); if (pixelRatio < 0.9) { fxOn = false; renderer.shadowMap.enabled = false; } resize(); slow = 0; }
     else if (fast >= 6 && pixelRatio < MAXPR) { pixelRatio = Math.min(MAXPR, pixelRatio * 1.1); resize(); fast = 0; }
@@ -501,7 +508,7 @@ function frame(now) {
     for (const k in demo.fx) demo.fx[k].update(dt, innerHeight * renderer.getPixelRatio() * 0.9);
     renderWorld(demo);
   } else if (mode === 'garage') {
-    garage.update(dt); renderer.toneMappingExposure = 1; renderer.render(garage.scene, garageCam);
+    garage.update(dt); renderer.toneMappingExposure = 0.72; renderer.render(garage.scene, garageCam);
   } else {
     renderer.setClearColor(0x070b18); renderer.clear();
   }

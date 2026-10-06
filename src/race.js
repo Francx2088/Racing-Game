@@ -109,7 +109,7 @@ export class Race {
 
     let acc = 0;
     if (!air) {
-      if (inp.throttle > 0) acc += 46 * ph.acc * inp.throttle * (1 - Math.pow(clamp(vF / vmax, 0, 1), 1.6));
+      if (inp.throttle > 0) acc += 52 * ph.acc * inp.throttle * (1 - Math.pow(clamp(vF / vmax, 0, 1), 1.6));
       if (c.boostT > 0) acc += 38 * c.boostMul;
       if (inp.brake > 0) acc -= (vF > 1 ? 70 : 20) * inp.brake;
       if (inp.throttle === 0 && inp.brake === 0) acc -= Math.sign(vF) * Math.min(Math.abs(vF) / dt, 7);
@@ -120,10 +120,10 @@ export class Race {
 
     // steering: full lock at speed swings the tail out into a power slide
     const sp = clamp(Math.abs(vF) / ph.vmax, 0, 1.3);
-    let wmax = (1.95 - 1.25 * Math.min(sp, 1)) * ph.turn;
+    let wmax = (2.05 - 1.2 * Math.min(sp, 1)) * ph.turn;
     if (inp.drift && !c.drifting && Math.abs(inp.steer) > 0.3 && vF > 25 && !air) { c.drifting = true; c.driftDir = Math.sign(inp.steer); }
     if (c.drifting && (!inp.drift || vF < 15 || air)) c.drifting = false;
-    const hardTurn = !air && Math.abs(inp.steer) > 0.72 && sp > 0.55;
+    const hardTurn = c.isPlayer && !air && Math.abs(inp.steer) > 0.72 && sp > 0.55;
     c.sliding = lerp(c.sliding, c.drifting || hardTurn ? 1 : 0, 1 - Math.exp(-(hardTurn ? 4 : 6) * dt));
     let yawIn = inp.steer;
     if (c.drifting) { yawIn = c.driftDir * (0.62 + 0.38 * inp.steer * c.driftDir); wmax *= 1.3; }
@@ -133,7 +133,7 @@ export class Race {
     c.steerState = lerp(c.steerState, inp.steer, 1 - Math.exp(-12 * dt));
 
     if (c.pushT > 0) c.pushT -= dt;
-    const gk = lerp(9, 3.2, c.sliding) * grip * (ph.grip ?? 1) * (c.pushT > 0 ? 0.22 : 1);
+    const gk = lerp(9, 4.2, c.sliding) * grip * (ph.grip ?? 1) * (c.pushT > 0 ? 0.3 : 1);
     const decay = air ? 0.05 : 1 - Math.exp(-gk * dt);
     vF -= Math.abs(vR) * decay * 0.08 * Math.sign(vF);
     vR -= vR * decay;
@@ -147,9 +147,10 @@ export class Race {
 
     // barriers exist only on some edges; elsewhere the deck simply ends
     T.query(c.x, c.z, c.hint, q); c.hint = q.i0;
-    const road = T.hasRoad(q.s), side = Math.sign(q.d), lim = T.wallD - 1.2;
-    if (road && !c.falling && Math.abs(q.d) > lim && T.wallAt(q.s, side)) {
-      const over = Math.abs(q.d) - lim, wrx = T.rx[q.i0], wrz = T.rz[q.i0];
+    const road = T.hasRoad(q.s), dk = T.deckAt(q.s, q.d, c.deck || (c.deck = {})), local = q.d - dk.c, side = Math.sign(local), lim = dk.half - 1.2;
+    c.branch = dk.branch;
+    if (road && !c.falling && Math.abs(local) > lim && (side < 0 ? dk.wl : dk.wr)) {
+      const over = Math.abs(local) - lim, wrx = T.rx[q.i0], wrz = T.rz[q.i0];
       c.x -= side * wrx * over; c.z -= side * wrz * over;
       const vn = (c.vx * wrx + c.vz * wrz) * side;
       if (vn > 0) {
@@ -164,14 +165,15 @@ export class Race {
     if (c.hitT > 0) c.hitT -= dt;
 
     // vertical: ride the deck, launch off crests and ramps, fall off open edges and into gaps
-    const onDeck = road && Math.abs(q.d) < T.wallD + 0.8 && !c.falling;
+    const onDeck = road && Math.abs(local) < dk.half + 0.8 && !c.falling;
     const gNow = onDeck ? q.surfaceY + T.rampAt(q.s, q.d) : -1e4;
     if (c.airborne) {
       c.vy -= this.gravity * dt; c.y += c.vy * dt;
       if (c.y <= gNow && c.y > gNow - 1.8) { c.y = gNow; c.airborne = false; if (-c.vy > 7) { this.cb.onLand?.(c, -c.vy); c.vx *= 0.99; c.vz *= 0.99; } c.vy = 0; }
       else if (c.y < gNow - 1.8 || !onDeck) { if (!onDeck && c.y < q.y - 4) c.falling = true; }
     } else {
-      const ballistic = c.y + (c.vy - this.gravity * dt) * dt;
+      // downforce keeps a car glued over crests; only ramps and real drops throw it into the air
+      const ballistic = c.y + (c.vy - this.gravity * 3 * dt) * dt;
       if (ballistic > gNow + 0.08) { c.airborne = true; c.vy -= this.gravity * dt; c.y += c.vy * dt; this.cb.onLaunch?.(c); }
       else { c.vy = clamp((gNow - c.y) / dt, -40, 40); c.y = gNow; }
     }
@@ -215,9 +217,10 @@ export class Race {
     const T = this.track, q = c.q, ph = c.phys, t = this.time;
     c.aiPhase += dt;
     const speed = Math.max(c.speed, 10);
-    if (this.player && !this.demo) c.rubber = clamp(1 - (c.prog - this.player.prog) * 0.00025, 0.92, 1.1);
+    if (this.player && !this.demo) c.rubber = clamp(1 - (c.prog - this.player.prog) * 0.00015, 0.97, 1.12);
     else c.rubber = 1;
-    const look = 14 + speed * 0.45;
+    const inFork = T.splitAt(q.s + 40) || T.splitAt(q.s);
+    const look = 14 + speed * (inFork ? 0.18 : 0.45);
     let lane = c.lane * T.hw * 0.5 + Math.sin(c.aiPhase * 0.3 + c.grid) * T.hw * 0.12;
     const gapNear = T.gapAhead(q.s, 220);
     if (gapNear) lane *= 0.15;
@@ -241,15 +244,31 @@ export class Race {
       if (o.isPlayer && Math.abs(ds) < 5 && Math.abs(o.q.d - q.d) < 7 && c.aggression > 0.6 && !gapNear) lane = o.q.d;
     }
     for (const p of T.pads) { const ds = p.s - q.s; if (ds > 0 && ds < 90 && !gapNear && Math.abs(p.d - lane) < 7) { lane = p.d; break; } }
-    lane = clamp(lane, -T.hw * 0.78, T.hw * 0.78);
-    const tp = T.pointAt(q.s + look, lane);
+    lane = clamp(lane, -T.hw * (T.wallAt(q.s + look, -1) ? 0.78 : 0.6), T.hw * (T.wallAt(q.s + look, 1) ? 0.78 : 0.6));
+    // at a fork, commit to a branch: bold drivers take the shortcut more often
+    const sAim = q.s + look, fork = T.splitAt(sAim) || T.splitAt(q.s);
+    const soon = !fork && T.splits.find((f) => f.s0 > q.s && f.s0 - q.s < 220);
+    if (soon) {
+      // line up on the side of the branch we are going to take before the road parts
+      if (c.forkFor !== soon) { c.forkFor = soon; c.forkPick = this.rand() < 0.3 + 0.4 * c.aggression ? 0 : 1; }
+      lane = (c.forkPick ? -soon.side : soon.side) * T.hw * 0.55;
+    }
+    if (fork) {
+      if (c.forkFor !== fork) { c.forkFor = fork; c.forkPick = this.rand() < 0.3 + 0.4 * c.aggression ? 0 : 1; }
+      const w = c.forkPick ? fork.wOut : fork.wIn, ctr = T.branchCenter(fork, c.forkPick, sAim);
+      let off = c.lane * w * 0.35;
+      for (const p of T.pads) { const ds = p.s - q.s; if (c.forkPick && ds > 0 && ds < 90) { off = p.d - ctr; break; } }
+      for (const o of this.obs) { if (o.gone || o.kind !== 'crate') continue; const ds = o.s - q.s; if (ds > 0 && ds < 20 + speed * 0.7 && Math.abs(o.d - ctr - off) < 3.5) off = clamp(o.d - ctr > 0 ? o.d - ctr - 4.5 : o.d - ctr + 4.5, -w * 0.7, w * 0.7); }
+      lane = ctr + clamp(off, -w * 0.6, w * 0.6);
+    }
+    const tp = T.pointAt(sAim, lane);
     const diff = wrapAngle(Math.atan2(tp.x - c.x, tp.z - c.z) - c.h);
-    const steer = clamp(-diff * 2.6, -1, 1);
+    const steer = clamp(-diff * (fork ? 3.4 : 2.6), -1, 1);
     const kap = T.curvAhead(q.i0, 30 + speed * 1.8);
     const latMax = 66 * (0.85 + 0.15 * c.skill) * (c.surface === 'road' ? 1 : 0.55);
     let vCorner = kap > 1e-4 ? Math.sqrt(latMax / kap) : 999;
     // and no faster than the steering can turn: yaw rate shrinks with speed
-    if (kap > 1e-4) { let v = vCorner; for (let k = 0; k < 3; k++) v = Math.min(vCorner, (1.95 - 1.25 * Math.min(v / ph.vmax, 1)) * ph.turn * 0.95 / kap); vCorner = v; }
+    if (kap > 1e-4) { let v = vCorner; for (let k = 0; k < 3; k++) v = Math.min(vCorner, (2.05 - 1.2 * Math.min(v / ph.vmax, 1)) * ph.turn * 0.95 / kap); vCorner = v; }
     let target = Math.min(ph.vmax * c.skill * c.rubber, vCorner);
     if (gapNear) target = Math.max(target, 75);
     if (c.finished) target = 20;
@@ -275,7 +294,7 @@ export class Race {
         const imp = -rv * 0.85 + 4;
         a.vx -= nx * imp; a.vz -= nz * imp; b.vx += nx * imp; b.vz += nz * imp;
         a.lastHitBy = b; a.lastHitT = this.time; b.lastHitBy = a; b.lastHitT = this.time;
-        if (-rv > 2) { a.pushT = b.pushT = 0.45; }
+        if (-rv > 2) { a.pushT = b.pushT = 0.35; }
         if (-rv > 3) this.cb.onBump?.(a, b, -rv);
       }
     }
@@ -283,7 +302,7 @@ export class Race {
 
   // ---------- obstacles ----------
   _obstacles(dt) {
-    const T = this.track, t = this.time, G = this.gravity, tmp = {};
+    const T = this.track, t = this.time, G = this.gravity, tmp = {}, tmp2 = {};
     for (let k = 0; k < this.obs.length; k++) {
       const o = this.obs[k]; if (o.gone) continue;
       if (o.kind === 'crate') {
@@ -291,7 +310,8 @@ export class Race {
           o.vy -= G * dt; o.x += o.vx * dt; o.y += o.vy * dt; o.z += o.vz * dt;
           o.rx += o.wx * dt; o.ry += o.wy * dt; o.rz += o.wz * dt;
           const n = T.query(o.x, o.z, T.idxAtS(o.s), tmp);
-          if (Math.abs(n.d) < T.wallD + 0.5 && T.hasRoad(n.s) && o.y < n.surfaceY + 0.8 && o.y > n.surfaceY - 2) {
+          const dk = T.deckAt(n.s, n.d, tmp2);
+          if (Math.abs(n.d - dk.c) < dk.half + 0.5 && T.hasRoad(n.s) && o.y < n.surfaceY + 0.8 && o.y > n.surfaceY - 2) {
             o.y = n.surfaceY + 0.8; if (o.vy < 0) o.vy *= -0.3;
             o.vx *= 0.96; o.vz *= 0.96; o.wx *= 0.95; o.wy *= 0.95; o.wz *= 0.95;
           }

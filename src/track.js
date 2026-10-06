@@ -1,7 +1,7 @@
 // Course data: spline sampling, road frames, nearest-point queries and gameplay layout
 // (boost pads, jumps, checkpoints, hazards, obstacles). No rendering here.
 import * as THREE from 'three';
-import { rng, clamp, wrapAngle } from './util.js';
+import { rng, clamp, wrapAngle, smooth as smoothstep } from './util.js';
 import { generateCourse } from './trackgen.js';
 
 const SPACING = 2;
@@ -71,9 +71,11 @@ export class Track {
     this.startS = 120;                      // start line
     this.finishS = this.length - 420;       // finish line; road continues as a run-off
 
+    this._findSplits();
+
     // Barriers only where they matter: the outside of real curves, the start and the finish.
     // Everywhere else the edge is open, so a car pushed wide falls into the sky.
-    const wl = new Uint8Array(N), wr = new Uint8Array(N), K0 = 1 / 240, pad = Math.round(45 / this.spacing);
+    const wl = new Uint8Array(N), wr = new Uint8Array(N), K0 = 1 / 380, pad = Math.round(45 / this.spacing);
     for (let i = 0; i < N; i++) {
       const k = this.kappa[i];
       if (k > K0) for (let j = Math.max(0, i - pad); j <= Math.min(N - 1, i + pad); j++) wl[j] = 1;
@@ -83,6 +85,59 @@ export class Track {
     this.wallL = wl; this.wallR = wr;
     this._buildContent();
   }
+
+  // Forks: on some long bends the road splits in two. The inside branch is narrow, unguarded and
+  // shorter; the outside branch is wide, walled and carries boost pads. They rejoin after the bend.
+  _findSplits() {
+    const def = this.def, want = def.splits ?? 0, L = 480, RAMP = 150, sp = this.spacing;
+    this.splits = [];
+    if (!want) return;
+    const cands = [];
+    for (let s = this.startS + 600; s < this.finishS - 700 - L; s += 40) {
+      if (this.gaps.some((g) => g.s0 < s + L + 220 && g.s1 > s - 220)) continue;
+      const a = this.idxAtS(s), n = Math.round(L / sp); let sgn = 0, ok = true, sum = 0;
+      for (let k = 0; k <= n && ok; k++) { const kk = this.kappa[a + k]; if (Math.abs(kk) > 1 / 140) ok = false; else if (Math.abs(kk) > 1 / 1200) { const g = Math.sign(kk); if (!sgn) sgn = g; else if (g !== sgn) ok = false; } sum += kk; }
+      // gentle sections are fallbacks: the inside branch is only a little shorter there
+      if (ok && sgn && Math.abs(sum / n) > 1 / 1400) cands.push({ s, side: sgn, k: Math.abs(sum / n) });
+      else if (ok && Math.abs(sum / n) > 1 / 6000) cands.push({ s, side: Math.sign(sum), k: Math.abs(sum / n) * 0.01 });
+    }
+    const minGap = Math.min(1100, (this.finishS - this.startS) / (want + 1) * 0.5);
+    cands.sort((x, y) => y.k - x.k);
+    for (const c of cands) {
+      if (this.splits.length >= want) break;
+      if (this.splits.some((q) => Math.abs(q.s0 - c.s) < minGap)) continue;
+      this.splits.push({ s0: c.s, s1: c.s + L, side: c.side, ramp: RAMP, S: def.hw + 9, wIn: def.hw * 0.75, wOut: def.hw });
+    }
+    this.splits.sort((x, y) => x.s0 - y.s0);
+    // flatten the banking through forks so both branches sit level
+    for (let i = 0; i < this.N; i++) {
+      const s = i * sp; let f = 1;
+      for (const q of this.splits) f = Math.min(f, 1 - smoothstep(q.s0 - 90, q.s0, s) * (1 - smoothstep(q.s1, q.s1 + 90, s)));
+      this.bank[i] *= f;
+    }
+  }
+  splitAt(s) { for (const q of this.splits) if (s >= q.s0 && s <= q.s1) return q; return null; }
+  sepAt(q, s) { return q.S * smoothstep(q.s0, q.s0 + q.ramp, s) * (1 - smoothstep(q.s1 - q.ramp, q.s1, s)); }
+  // branch k: 0 = inside (shortcut), 1 = outside
+  branchCenter(q, k, s) { const sep = this.sepAt(q, s); return k === 0 ? q.side * sep : -q.side * sep; }
+  // The drivable piece of deck under (s, d): its centre, half width to the edge, and which edges have barriers.
+  deckAt(s, d, out = {}) {
+    const q = this.splitAt(s);
+    if (!q) { out.c = 0; out.half = this.wallD; out.wl = this.wallAt(s, -1); out.wr = this.wallAt(s, 1); out.branch = -1; return out; }
+    const c0 = this.branchCenter(q, 0, s), c1 = this.branchCenter(q, 1, s);
+    const e0 = Math.abs(d - c0) - q.wIn, e1 = Math.abs(d - c1) - q.wOut;
+    const k = e0 < e1 ? 0 : 1;
+    out.c = k ? c1 : c0; out.half = (k ? q.wOut : q.wIn) + this.shoulder; out.branch = k;
+    // barriers: the outside branch's outer edge, and both inner edges once a void opens between them.
+    // The shortcut's inner-curve edge stays open.
+    const outer = k ? -q.side : q.side, inner = -outer, wallIn = this.forkGap(q, s) > 0;
+    const wOuter = k === 1, left = (outer < 0 && wOuter) || (inner < 0 && wallIn), right = (outer > 0 && wOuter) || (inner > 0 && wallIn);
+    out.wl = left ? 1 : 0; out.wr = right ? 1 : 0;
+    return out;
+  }
+  plain(s) { return this.hasRoad(s) && !this.splitAt(s); }
+  // width of the open void between the two branches
+  forkGap(q, s) { return 2 * this.sepAt(q, s) - (q.wIn + q.wOut + 2 * this.shoulder); }
 
   _key(a, b) { return a * 73856093 ^ b * 19349663; }
 
@@ -147,6 +202,14 @@ export class Track {
   gapAhead(s, dist) { for (const g of this.gaps) if (g.s0 > s && g.s0 - s < dist) return g; return null; }
   // road pieces between gaps, as [s0, s1]
   get segments() {
+    const cuts = [...this.gaps.map((g) => [g.s0, g.s1]), ...this.splits.map((q) => [q.s0, q.s1])].sort((x, y) => x[0] - y[0]);
+    const out = []; let s = 0;
+    for (const [a, b] of cuts) { out.push([s, a]); s = b; }
+    out.push([s, this.length]);
+    return out;
+  }
+  // road pieces between jump gaps (forks included)
+  get drivable() {
     const out = []; let s = 0;
     for (const g of this.gaps) { out.push([s, g.s0]); s = g.s1; }
     out.push([s, this.length]);
@@ -157,6 +220,7 @@ export class Track {
     const def = this.def, r = rng(def.seed * 7 + 3), L = this.length, hw = def.hw;
     const used = [[0, this.startS + 140], [this.finishS - 80, L]];
     for (const g of this.gaps) used.push([g.s0 - 110, g.s1 + 70]);
+    for (const q of this.splits) used.push([q.s0 - 60, q.s1 + 60]);
     for (const g of this.gaps) for (let s = g.s0; s < g.s1; s += this.spacing) { const i = this.idxAtS(s); this.wallL[i] = this.wallR[i] = 0; }
     const free = (s, len) => used.every(([a, b]) => s + len < a - 15 || s > b + 15);
     const place = (len, test = () => true, tries = 160) => {
@@ -168,7 +232,9 @@ export class Track {
 
     // jump ramps at every gap + a few kickers
     this.ramps = this.gaps.map((g) => ({ s: g.s0 - 22, len: 22, h: 3.2, w: this.wallD + 0.6, gap: true }));
-    for (let k = 0; k < (def.kickers ?? 1); k++) { const s = place(70, gentle(70)); if (s != null) this.ramps.push({ s, len: 18, h: def.gravity ? 4.5 : 2.8, w: hw * 0.55 }); }
+    // kickers only where the road runs straight long enough to land at 400 km/h
+    const straightFor = (len) => (s) => { const a = this.idxAtS(s), n = Math.ceil(len / this.spacing); for (let k = 0; k < n; k++) if (this.absKappa[Math.min(a + k, this.N - 1)] > 1 / 1500 || this.splitAt(s + k * this.spacing)) return false; return true; };
+    for (let k = 0; k < (def.kickers ?? 1); k++) { const s = place(260, straightFor(260)); if (s != null) this.ramps.push({ s, len: 22, h: def.gravity ? 2.6 : 1.8, w: hw * 0.55 }); }
 
     // boost pads, often in chains of 2-3 down the same lane
     this.pads = [];
@@ -180,6 +246,9 @@ export class Track {
       for (let c = 0; c < chain; c++) this.pads.push({ s: s + c * 46, len: 12, d: lane, w: padW });
     }
     for (const g of this.gaps) this.pads.push({ s: g.s0 - 95, len: 12, d: 0, w: padW });
+    for (const q of this.splits) {
+        for (let c = 0; c < 3; c++) this.pads.push({ s: q.s0 + q.ramp + 20 + c * 60, len: 12, d: -q.side * q.S, w: padW });
+    }
 
     // surface hazards + crosswinds
     this.zones = [];
@@ -214,9 +283,15 @@ export class Track {
       }
     }
 
+    // a couple of crate stacks on each shortcut
+    for (const q of this.splits) for (const cs of [q.s0 + (q.s1 - q.s0) * 0.42, q.s0 + (q.s1 - q.s0) * 0.62]) {
+      const lane = q.side * q.S + r.range(-0.4, 0.4) * q.wIn;
+      for (let c = 0; c < 4; c++) this.obstacles.push({ kind: 'crate', s: cs + (c % 2) * 2.2, d: lane + Math.floor(c / 2) * 2.2 - 1.1, stack: 0 });
+    }
+
     // checkpoints: respawn points when a car falls
     this.checkpoints = [this.startS];
-    for (let s = 900; s < this.finishS - 300; s += 900) if (this.hasRoad(s) && !this.gaps.some((g) => Math.abs(g.s0 - s) < 220)) this.checkpoints.push(s);
+    for (let s = 900; s < this.finishS - 300; s += 900) if (this.hasRoad(s) && !this.gaps.some((g) => Math.abs(g.s0 - s) < 220) && !this.splits.some((q) => s > q.s0 - 80 && s < q.s1 + 40)) this.checkpoints.push(s);
     for (const g of this.gaps) this.checkpoints.push(g.s0 - 200);
     this.checkpoints.sort((a, b) => a - b);
   }

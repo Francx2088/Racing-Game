@@ -11,6 +11,8 @@ import { makeNoise, rng, clamp } from './util.js';
 import { Weather } from './fx.js';
 
 const D2R = Math.PI / 180;
+// less scenery on phones and tablets
+const DENSITY = typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches ? 0.6 : 1;
 
 function applySky(sky, p, sunDir) {
   const u = sky.material.uniforms;
@@ -67,7 +69,7 @@ export function buildWorld(levelDef, renderer) {
   // ---- lights (+ real-time shadows around the player) ----
   const hemi = new THREE.HemisphereLight(th.hemi[0], th.hemi[1], th.hemi[2]); scene.add(hemi);
   const sun = new THREE.DirectionalLight(th.sun.color, th.sun.int);
-  sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048);
+  sun.castShadow = true; sun.shadow.mapSize.set(1024, 1024);
   const sc = sun.shadow.camera; sc.left = -52; sc.right = 52; sc.top = 52; sc.bottom = -52; sc.near = 1; sc.far = 420;
   sun.shadow.bias = -0.0003; sun.shadow.normalBias = 0.04; sun.shadow.radius = 2;
   scene.add(sun, sun.target);
@@ -88,7 +90,7 @@ export function buildWorld(levelDef, renderer) {
     // random points in the 3D volume around the track. cb(x,y,z) -> instance | null
     volume(o0, cb) {
       // scenery density is tuned per 2 km of road
-      const o = { ...o0, count: o0.fixed ? o0.count : Math.round(o0.count * Math.max(1, track.length / 2000)) };
+      const o = { ...o0, count: o0.fixed ? o0.count : Math.round(o0.count * DENSITY * Math.min(3.2, Math.max(1, track.length / 3200))) };
       const out = [], tries = o.tries ?? o.count * 20, N = track.N, placed = [];
       for (let t = 0; t < tries && out.length < o.count; t++) {
         const i = (r() * N) | 0, a = r() * 6.28, d = o.minD + r() * (o.maxD - o.minD);
@@ -125,7 +127,10 @@ export function buildWorld(levelDef, renderer) {
       list.forEach((it, i) => { if (it.color != null) im.setColorAt(i, col.set(it.color)); });
       const upd = (t) => {
         for (let i = 0; i < list.length; i++) {
-          const it = list[i]; o.x = it.x; o.y = it.y; o.z = it.z; o.rx = 0; o.ry = it.ry ?? 0; o.rz = 0; o.s = it.s ?? 1; o.sx = o.sy = o.sz = 1;
+          const it = list[i];
+          // props far from the camera keep their last pose; nobody can see them move
+          if (!it.cx && !it.always && Math.abs(it.x - ctx.camPos.x) + Math.abs(it.z - ctx.camPos.z) > 1600 && t > 0) continue;
+          o.x = it.x; o.y = it.y; o.z = it.z; o.rx = 0; o.ry = it.ry ?? 0; o.rz = 0; o.s = it.s ?? 1; o.sx = o.sy = o.sz = 1;
           step(it, t, o, i); e.set(o.rx, o.ry, o.rz); q.setFromEuler(e); p.set(o.x, o.y, o.z); sv.set(o.s * o.sx, o.s * o.sy, o.s * o.sz);
           m4.compose(p, q, sv); im.setMatrixAt(i, m4);
         }

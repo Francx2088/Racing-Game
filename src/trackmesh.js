@@ -23,7 +23,8 @@ function stripSpan(track, a, b, { s0 = 0, s1 = null, vTile = 20, lift = 0 } = {}
   const pos = new Float32Array(cnt * 6), uv = new Float32Array(cnt * 4), idx = [];
   for (let k = 0; k < cnt; k++) {
     const i = i0 + k, tb = Math.tan(track.bank[i]), rx = track.rx[i], rz = track.rz[i];
-    const put = (slot, o) => {
+    const put = (slot, o0) => {
+      const o = typeof o0 === 'function' ? o0(i) : o0;
       const o3 = (k * 2 + slot) * 3;
       pos[o3] = track.px[i] + rx * o.d; pos[o3 + 1] = track.py[i] + tb * o.d + o.dy + lift; pos[o3 + 2] = track.pz[i] + rz * o.d;
     };
@@ -44,7 +45,7 @@ function stripSpan(track, a, b, { s0 = 0, s1 = null, vTile = 20, lift = 0 } = {}
 function maskedStrip(track, a, b, mask, opts = {}) {
   const runs = []; let i0 = -1;
   for (let i = 0; i <= track.N; i++) {
-    const on = i < track.N && mask[i] && track.hasRoad(i * track.spacing);
+    const on = i < track.N && mask[i] && track.plain(i * track.spacing);
     if (on && i0 < 0) i0 = i;
     else if (!on && i0 >= 0) { if (i - i0 > 1) runs.push([i0, i - 1]); i0 = -1; }
   }
@@ -90,6 +91,7 @@ export function buildTrackMeshes(track, th, group) {
   const maps = asphaltMaps({ base: css(R.base), line: css(R.line), center: R.center !== false, centerColor: R.centerColor != null ? css(R.centerColor) : null, edgeGlow: R.edgeGlow != null ? css(R.edgeGlow) : null, wet: !!R.wet, seed: track.def.seed });
   const roadMat = new THREE.MeshStandardMaterial({ map: maps.map, normalMap: maps.normal, normalScale: new THREE.Vector2(0.45, 0.45), roughnessMap: maps.roughMap, roughness: 1, metalness: 0, envMapIntensity: R.env ?? 0.6, side: THREE.DoubleSide });
   mk(strip(track, { d: -hw, dy: 0 }, { d: hw, dy: 0 }, { vTile: 32 }), roadMat, 0, { receive: true });
+  const roadMat2 = roadMat.clone(); roadMat2.polygonOffset = true; roadMat2.polygonOffsetFactor = -1; roadMat2.polygonOffsetUnits = -1;
 
   // ---- rumble kerbs ----
   const kerbMat = new THREE.MeshStandardMaterial({ map: kerbTexture(R.kerbA, R.kerbB), roughness: 0.7, metalness: 0, side: THREE.DoubleSide, envMapIntensity: 0.3 });
@@ -141,7 +143,7 @@ export function buildTrackMeshes(track, th, group) {
   }
   if (btype === 'rail') {
     const post = instances(new THREE.BoxGeometry(0.14, 1.0, 0.14), new THREE.MeshStandardMaterial({ color: 0x4a4e55, roughness: 0.7, metalness: 0.4 }),
-      (() => { const l = []; for (let s = 0; s < track.length; s += 4) for (const sg of [-1, 1]) { if (!track.hasRoad(s) || !track.wallAt(s, sg)) continue; const p = track.pointAt(s, sg * (wd + 0.25)); l.push({ x: p.x, y: p.y + 0.35, z: p.z, ry: p.head }); } return l; })());
+      (() => { const l = []; for (let s = 0; s < track.length; s += 4) for (const sg of [-1, 1]) { if (!track.plain(s) || !track.wallAt(s, sg)) continue; const p = track.pointAt(s, sg * (wd + 0.25)); l.push({ x: p.x, y: p.y + 0.35, z: p.z, ry: p.head }); } return l; })());
     post.castShadow = true; group.add(post);
   }
   // chevron boards on the outside of the sharp bends
@@ -150,7 +152,7 @@ export function buildTrackMeshes(track, th, group) {
     const list = { [-1]: [], [1]: [] };
     for (let i = 0; i < N; i += 7) {
       const k = track.kappa[i]; if (Math.abs(k) < 1 / 150) continue;
-      const side = k > 0 ? -1 : 1, s = i * track.spacing; if (!track.hasRoad(s) || !track.wallAt(s, side)) continue;
+      const side = k > 0 ? -1 : 1, s = i * track.spacing; if (!track.plain(s) || !track.wallAt(s, side)) continue;
       const p = track.pointAt(s, side * (wd + 0.6));
       list[side].push({ x: p.x, y: p.y + 2.1, z: p.z, ry: p.head + (side > 0 ? -Math.PI / 2 : Math.PI / 2) });
     }
@@ -160,12 +162,52 @@ export function buildTrackMeshes(track, th, group) {
     group.add(instances(new THREE.BoxGeometry(0.15, 1.6, 0.15), new THREE.MeshStandardMaterial({ color: 0x30343c, metalness: 0.6, roughness: 0.5 }), legs));
   }
 
+  // ---- forks: two branch roads that split apart through a bend and rejoin ----
+  for (const q of track.splits) {
+    const o = { s0: q.s0, s1: q.s1 };
+    for (const k of [0, 1]) {
+      const w = k ? q.wOut : q.wIn, sh = track.shoulder, outer = k ? -q.side : q.side;
+      const at = (dd, dy = 0) => (i) => ({ d: track.branchCenter(q, k, i * track.spacing) + dd, dy });
+      const rm = k ? roadMat : roadMat2;
+      mk(stripSpan(track, at(-w), at(w), { ...o, vTile: 32 }), rm, k ? 0 : 1);
+      for (const sg of [-1, 1]) {
+        mk(stripSpan(track, at(sg * (w - 0.15), 0.025 + k * 0.01), at(sg * (w + 1.2), 0.025 + k * 0.01), { ...o, vTile: 6 }), kerbMat, 1);
+        mk(stripSpan(track, at(sg * (w + 1.2)), at(sg * (w + sh)), { ...o, vTile: 6 }), shMat, 0);
+        const edge = sg * (w + sh);
+        const prof = [[0, 0], [0.13, 0.3], [0.22, 0.88], [0.5, 0.95], [0.5, -1.5]];
+        const wall = (span) => { for (let i = 0; i < prof.length - 1; i++) mk(stripSpan(track, at(edge + sg * prof[i][0], prof[i][1]), at(edge + sg * prof[i + 1][0], prof[i + 1][1]), { ...span, vTile: 16 }), barMat, 0, { cast: true }); };
+        if (k === 1 && sg === outer) wall(o);
+        else if (sg === -outer) {
+          // inner edges: walled wherever the void between the branches is open
+          let a0 = null, a1 = null; for (let ss = q.s0; ss <= q.s1; ss += 2) if (track.forkGap(q, ss) > 0) { if (a0 == null) a0 = ss; a1 = ss; }
+          if (a0 != null) wall({ s0: a0, s1: a1 });
+        } else {
+          mk(stripSpan(track, at(edge - sg * 0.35, 0.03), at(edge + sg * 0.02, 0.03), { ...o, vTile: 4 }), edgeMat, 4, { receive: false });
+          mk(stripSpan(track, at(edge + sg * 0.02, 0.03), at(edge + sg * 0.02, -0.6), { ...o, vTile: 4 }), edgeMat, 4, { receive: false });
+        }
+      }
+      const W = w + sh + 0.7, prof = [[-W, -0.05], [-W, -1.5], [-w * 0.5, -3.2], [w * 0.5, -3.2], [W, -1.5], [W, -0.05]];
+      for (let i = 0; i < prof.length - 1; i++) mk(stripSpan(track, at(prof[i][0], prof[i][1]), at(prof[i + 1][0], prof[i + 1][1]), { ...o, vTile: 10 }), concMat, 0, { cast: true });
+    }
+    // fork signs: an arrow board for each branch where they part
+    const sgn = canvasTex(256, 128, (g, w, h) => {
+      g.fillStyle = '#12141c'; g.fillRect(0, 0, w, h); g.strokeStyle = css(th.accent); g.lineWidth = 6; g.strokeRect(4, 4, w - 8, h - 8);
+      g.fillStyle = '#fff'; g.font = 'italic 900 34px "Arial Black", Impact, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.fillText('SHORTCUT', w / 2, h / 2);
+    });
+    const p = track.pointAt(q.s0 + q.ramp * 0.7, track.branchCenter(q, 0, q.s0 + q.ramp * 0.7));
+    const board = new THREE.Mesh(new THREE.PlaneGeometry(6, 3), new THREE.MeshBasicMaterial({ map: sgn, side: THREE.DoubleSide }));
+    board.position.set(p.x, p.y + 7.5, p.z); board.rotation.y = p.head + Math.PI; group.add(board);
+    const poles = new THREE.Mesh(new THREE.BoxGeometry(0.25, 7.5, 0.25), new THREE.MeshStandardMaterial({ color: 0x30343c, metalness: 0.6, roughness: 0.5 }));
+    poles.position.set(p.x, p.y + 3.75, p.z); group.add(poles);
+  }
+
   // ---- lamp posts (speed cues + night lighting) ----
   {
     const pole = merge([part(cyl(0.1, 0.16, 9, 8), 0x3a3f48, { p: [0, 4.5, 0] }), part(box(0.18, 0.18, 2.6), 0x3a3f48, { p: [0, 8.9, 1.2] }), part(box(0.5, 0.12, 0.9), 0xffffff, { p: [0, 8.78, 2.4] })]);
     const lamps = [], pools = [];
     for (let s = 30; s < track.length; s += 55) {
-      if (!track.hasRoad(s)) continue;
+      if (!track.plain(s)) continue;
       const side = ((s / 55) | 0) % 2 ? 1 : -1; const p = track.pointAt(s, side * (wd + 0.5));
       lamps.push({ x: p.x, y: p.y, z: p.z, ry: p.head + (side > 0 ? Math.PI : 0) + Math.PI });
       const q = track.pointAt(s, side * (hw * 0.55)); pools.push({ x: q.x, y: q.y + 0.04, z: q.z, ry: p.head, s: [hw * 1.8, 1, hw * 1.8] });
@@ -185,7 +227,11 @@ export function buildTrackMeshes(track, th, group) {
   // ---- pylons holding the deck up in the sky ----
   if (th.pylons !== 'none') {
     const pg = new THREE.CylinderGeometry(1.8, 3.2, 420, 10); pg.translate(0, -210, 0);
-    const list = []; for (let s = 40; s < track.length; s += th.pylonGap ?? 120) { if (!track.hasRoad(s - 10) || !track.hasRoad(s + 10)) continue; const p = track.pointAt(s, 0); list.push({ x: p.x, y: p.y - 3.5, z: p.z }); }
+    const list = []; for (let s = 40; s < track.length; s += th.pylonGap ?? 120) {
+      if (!track.hasRoad(s - 10) || !track.hasRoad(s + 10)) continue;
+      const q = track.splitAt(s);
+      for (const d of q ? [track.branchCenter(q, 0, s), track.branchCenter(q, 1, s)] : [0]) { const p = track.pointAt(s, d); list.push({ x: p.x, y: p.y - 3.5, z: p.z }); }
+    }
     const pm = instances(pg, concMat, list); pm.castShadow = false; group.add(pm);
   }
 

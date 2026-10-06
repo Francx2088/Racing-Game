@@ -231,7 +231,7 @@ export class UI {
     this.mm = { b, S, ox, oy };
     const c = document.createElement('canvas'); c.width = c.height = 160; const g = c.getContext('2d');
     g.lineJoin = g.lineCap = 'round';
-    for (const [s0, s1] of track.segments) {
+    for (const [s0, s1] of track.drivable) {
       const path = () => { g.beginPath(); for (let i = track.idxAtS(s0); i <= track.idxAtS(s1); i += 3) { const x = ox + (track.px[i] - b.minX) * S, y = oy + (track.pz[i] - b.minZ) * S; i === track.idxAtS(s0) ? g.moveTo(x, y) : g.lineTo(x, y); } };
       g.strokeStyle = 'rgba(0,0,0,.55)'; g.lineWidth = 7; path(); g.stroke(); g.strokeStyle = 'rgba(255,255,255,.9)'; g.lineWidth = 3.5; path(); g.stroke();
     }
