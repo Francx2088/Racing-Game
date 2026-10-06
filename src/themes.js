@@ -129,7 +129,7 @@ THEMES.storm = {
     const bolt = mkBolt(); ctx.scene.add(bolt); bolt.visible = false; let nextT = 3, flash = 0;
     const base = ctx.hemi.intensity;
     ctx.anim.push((dt, t, cam) => {
-      if (t > nextT) { nextT = t + 2.5 + r() * 6; flash = 1; const a = r() * 6.28, d = 160 + r() * 250; bolt.position.set(cam.position.x + Math.cos(a) * d, 0, cam.position.z + Math.sin(a) * d); bolt.visible = true; mat.opacity = 1; ctx.bolt = true; }
+      if (t > nextT) { nextT = t + 2.5 + r() * 6; flash = 1; const a = r() * 6.28, d = 160 + r() * 250; bolt.position.set(cam.position.x + Math.cos(a) * d, 0, cam.position.z + Math.sin(a) * d); bolt.visible = true; mat.opacity = 1; if (ctx.events.thunder) ctx.events.thunder(bolt.position.distanceTo(cam.position)); }
       flash = Math.max(0, flash - dt * 4); const f = flash > 0.55 ? 1 : flash > 0.3 ? 0.2 : flash > 0.15 ? 0.7 : 0;
       ctx.hemi.intensity = base + f * 0.7; mat.opacity = f; if (flash <= 0) bolt.visible = false;
     });
@@ -144,7 +144,7 @@ THEMES.city = {
   fog: [0x150b30, 90, 1250], sun: { color: 0x7a8cff, int: 0.9 }, hemi: [0x4a4cc0, 0x1a1030, 0.7], exposure: 0.75, envInt: 0.7, glare: 0,
   clouds: [{ y: -110, color: 0x6a5a8a, shade: 0x1a1230, density: 0.55, alpha: 0.85, scale: 0.0014, glow: 0xff7a3a, glowAmt: 0.5 }],
   road: { base: 0x2c2d34, line: 0xe6e6f0, kerbA: 0xd0d0d8, kerbB: 0x30303a, shoulder: 0x3a3b44, wallA: 0x6a6a78, wallB: 0x3a3a48, barrier: 'glass', deck: 0x5a5a66, env: 0.9, wallGlow: 0x00e5ff, underglow: 0xff2bd6, edgeGlow: 0x00e5ff },
-  weather: ['wisps'],
+  weather: [],
   build(ctx) {
     const { r, track } = ctx;
     const pal = [['#00f0ff', '#ff2bd6', '#ffe14d'], ['#ff2bd6', '#7c4dff', '#ffffff'], ['#33ff99', '#00f0ff', '#ffffff'], ['#ffb300', '#ff5e00', '#ffe14d']];
@@ -190,8 +190,8 @@ THEMES.arctic = {
 // ============ 6. EMBER ============
 THEMES.ember = {
   accent: 0xff5a1f, bgm: { root: 123.5, scale: 'phrygian', bpm: 138 }, card: [0x2a0808, 0xa0301a, 0xff8a2a],
-  sky: { turb: 12, ray: 1.1, mie: 0.012, mieG: 0.78, elev: 3, azim: 160 },
-  fog: [0x6a2a1c, 70, 980], sun: { color: 0xff8a50, int: 2.2 }, hemi: [0xff8a5a, 0x2a0a08, 0.5], exposure: 0.45, envInt: 0.9, glare: 0.7,
+  sky: { turb: 10, ray: 1.2, mie: 0.006, mieG: 0.75, elev: 3, azim: 160 },
+  fog: [0x6a2a1c, 70, 980], sun: { color: 0xff8a50, int: 2.2 }, hemi: [0xff8a5a, 0x2a0a08, 0.5], exposure: 0.42, envInt: 0.9, glare: 0.3,
   clouds: [{ y: -60, color: 0xb86a4a, shade: 0x2a1410, density: 0.46, alpha: 0.97, scale: 0.0015, glow: 0xff5a10, glowAmt: 0.25 }, { y: -170, color: 0xff7a2a, shade: 0x7a1e08, density: 0.38, alpha: 1, scale: 0.0011, glow: 0xff6a10, glowAmt: 0.7, speed: 1.4 }],
   road: { base: 0x2f2d30, line: 0xffd9a0, kerbA: 0xff5a1f, kerbB: 0x2a2024, shoulder: 0x3a3436, wallA: 0x4a4044, wallB: 0x6a3a2a, barrier: 'jersey', deck: 0x5a4a46, env: 0.8, wallGlow: 0xff6a1a, underglow: 0xff5a1f },
   weather: ['embers', 'wisps'],
@@ -280,7 +280,7 @@ THEMES.stratos = {
 THEMES.mesa = {
   accent: 0xffa040, bgm: { root: 165, scale: 'phrygian', bpm: 124 }, card: [0x3a2a6a, 0xff9a5a, 0xffe0a0],
   sky: { turb: 9, ray: 1.4, mie: 0.01, mieG: 0.9, elev: 7, azim: 90 },
-  fog: [0xeaba98, 120, 1300], sun: { color: 0xffd0a0, int: 3.2 }, hemi: [0xffd8b8, 0xa86a50, 0.55], exposure: 0.5, envInt: 1.0, glare: 0.8,
+  fog: [0xeaba98, 120, 1300], sun: { color: 0xffd0a0, int: 3.2 }, hemi: [0xffd8b8, 0xa86a50, 0.5], exposure: 0.42, envInt: 1.0, glare: 0.5,
   clouds: [{ y: -95, color: 0xffd8c0, shade: 0xb06a74, density: 0.56, alpha: 0.9, scale: 0.0014, soft: 0.3 }],
   road: { base: 0x3e3c3c, line: 0xf0e0c8, kerbA: 0xc2511f, kerbB: 0xf2e6d4, shoulder: 0x6a5a50, wallA: 0xcfa27a, wallB: 0xa6623a, barrier: 'jersey', deck: 0xa8826a, env: 0.7 },
   weather: ['dust', 'wisps'],
@@ -304,7 +304,7 @@ THEMES.mesa = {
 THEMES.heaven = {
   accent: 0xffe08a, bgm: { root: 233, scale: 'major', bpm: 140 }, card: [0x6aa8ff, 0xfff0c8, 0xffd27a],
   sky: { turb: 4, ray: 1.8, mie: 0.005, mieG: 0.86, elev: 22, azim: 200 },
-  fog: [0xcfe4fa, 220, 1800], sun: { color: 0xfff0d0, int: 3.4 }, hemi: [0xdfeeff, 0xf0e0b8, 0.6], exposure: 0.4, envInt: 1.0, glare: 1.0,
+  fog: [0xcfe4fa, 220, 1800], sun: { color: 0xfff0d0, int: 3.4 }, hemi: [0xdfeeff, 0xf0e0b8, 0.55], exposure: 0.36, envInt: 1.0, glare: 0.7,
   clouds: [{ y: -90, color: 0xffffff, shade: 0xb0c4e4, density: 0.5, alpha: 0.98, scale: 0.0014 }, { y: -200, color: 0xfff1d4, shade: 0xb2a2c2, density: 0.46, alpha: 0.96, scale: 0.001, speed: 0.6 }],
   road: { base: 0x46484e, line: 0xffffff, kerbA: 0xd4a017, kerbB: 0xffffff, shoulder: 0x70747a, wallA: 0xfaf6ea, wallB: 0xd4a017, barrier: 'glass', deck: 0xe6e0d0, env: 1.0, wallGlow: 0xffd45a },
   weather: ['wisps', 'sparkle'],

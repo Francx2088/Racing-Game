@@ -81,8 +81,9 @@ export function buildWorld(levelDef, renderer) {
 
   // ---- scenery context ----
   const bounds = track.bounds, cx = (bounds.minX + bounds.maxX) / 2, cz = (bounds.minZ + bounds.maxZ) / 2;
+  const events = { thunder: null };
   const ctx = {
-    track, th, group, r, noise, wd: track.wallD, scene, sunDir, lightDir, hemi, sun, anim, cx, cz, bounds,
+    events, track, th, group, r, noise, wd: track.wallD, scene, sunDir, lightDir, hemi, sun, anim, cx, cz, bounds,
     place(geo, mat, list, { cast = false } = {}) { const im = instances(geo, mat, list); im.castShadow = cast; group.add(im); return im; },
     // random points in the 3D volume around the track. cb(x,y,z) -> instance | null
     volume(o, cb) {
@@ -124,7 +125,7 @@ export function buildWorld(levelDef, renderer) {
   const weather = wl.filter((k) => k !== 'none').map((k) => new Weather(k, scene));
 
   return {
-    scene, track, th, tm, weather, levelDef, sun, hemi, exposure: th.exposure, heightAt: () => -1000,
+    scene, track, th, tm, weather, levelDef, events, sun, hemi, exposure: th.exposure, heightAt: () => -1000,
     update(dt, t, camera, focus) {
       sky.position.copy(camera.position);
       if (sunSpr) sunSpr.position.copy(glareDir).multiplyScalar(2300).add(camera.position);

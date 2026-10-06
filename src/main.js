@@ -209,16 +209,18 @@ async function startRace(levelIndex) {
   ui.initHud(world.track, total, L.laps, race.cars);
   ui.show('hud'); ui.hideLoading(); mode = 'race';
   audio.stopMusic(); audio.playMusic(th.bgm);
+  audio.ambience((Array.isArray(th.weather) ? th.weather : []).includes('rain') ? 'rain' : 'none');
+  world.events.thunder = (dist) => setTimeout(() => audio.thunder(), Math.min(2500, dist * 3));
   resize();
 }
 function endRace() {
   if (!S) return;
-  S.world.dispose(); S = null; audio.engine(0, 0, false, false); audio.skid(0);
+  S.world.dispose(); S = null; audio.engine(0, 0, false, false); audio.skid(0); audio.ambience('none');
   document.getElementById('vignette').className = '';
   const fx = document.getElementById('fxlines').getContext('2d'); fx.clearRect(0, 0, 9999, 9999);
 }
-function pauseRace() { if (!S || S.paused || S.over) return; S.paused = true; ui.showPause(save); audio.engine(0, 0, false, false); audio.skid(0); }
-function resumeRace() { if (!S) return; S.paused = false; ui.hidePause(); }
+function pauseRace() { if (!S || S.paused || S.over) return; S.paused = true; ui.showPause(save); audio.engine(0, 0, false, false); audio.skid(0); audio.ambience('none'); }
+function resumeRace() { if (!S) return; S.paused = false; ui.hidePause(); audio.ambience((Array.isArray(S.th.weather) ? S.th.weather : []).includes('rain') ? 'rain' : 'none'); }
 platform.onPause(() => { if (mode === 'race') pauseRace(); audio.pause(); });
 platform.onResume(() => audio.resume());
 
@@ -420,6 +422,11 @@ function frame(now) {
       // audio
       const sp01 = clamp(Math.abs(p.speed) / (p.def.phys.vmax * 1.2), 0, 1.1);
       audio.engine(sp01, race.state === 'countdown' ? (p.input.throttle > 0 ? 0.8 : 0.1) : inp.throttle, p.boostT > 0 || p.nitroOn, true);
+      {
+        let best = null, bd = 1e9;
+        for (const c of race.cars) { if (c === p) continue; const d = Math.hypot(c.x - p.x, c.z - p.z); if (d < bd) { bd = d; best = c; } }
+        if (best) { const rx = -Math.cos(p.h), rz = Math.sin(p.h); audio.rival(bd, ((best.x - p.x) * rx + (best.z - p.z) * rz) / Math.max(bd, 1), Math.abs(best.speed) / best.def.phys.vmax); }
+      }
       audio.skid(p.drifting ? 0.9 : Math.abs(p.slip) > 0.25 && p.speed > 18 && p.onRoad ? clamp(Math.abs(p.slip) * 2, 0, 0.9) : 0);
       // speed lines
       speedLines(clamp((Math.abs(p.speed) / p.def.phys.vmax - 0.62) * 2.2, 0, 1) + (p.boostT > 0 || p.nitroOn ? 0.5 : 0), S.t);
@@ -451,5 +458,5 @@ function fastForward(sec, { finish = false } = {}) {
   syncVisuals(0); updateCamera(0.016, true);
 }
 function debugView(o) { S.debugCam = o; }
-window.__game = { fastForward, debugView, get S() { return S; }, save, ui, startRace, CARS, LEVELS, renderer };
+window.__game = { audio, fastForward, debugView, get S() { return S; }, save, ui, startRace, CARS, LEVELS, renderer };
 boot().catch((e) => { console.error(e); document.getElementById('loadtxt').textContent = 'Failed to load: ' + e.message; });
